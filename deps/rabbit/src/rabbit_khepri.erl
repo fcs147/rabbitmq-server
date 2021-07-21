@@ -41,10 +41,10 @@
 
 -compile({no_auto_import, [get/2]}).
 
--define(RA_SYSTEM, metadata_store). %% FIXME: Also hard-coded in rabbit.erl.
--define(RA_CLUSTER_NAME, ?RA_SYSTEM).
+-define(RA_SYSTEM, coordination).
+-define(RA_CLUSTER_NAME, metadata_store).
 -define(RA_FRIENDLY_NAME, "RabbitMQ metadata store").
--define(STORE_NAME, ?RA_SYSTEM).
+-define(STORE_NAME, ?RA_CLUSTER_NAME).
 -define(MDSTORE_SARTUP_LOCK, {?MODULE, self()}).
 -define(PT_KEY, ?MODULE).
 
@@ -52,11 +52,16 @@
 %% API wrapping Khepri.
 %% -------------------------------------------------------------------
 
+-spec setup() -> ok | no_return().
+
 setup() ->
     setup(rabbit_prelaunch:get_context()).
 
+-spec setup(map()) -> ok | no_return().
+
 setup(_) ->
-    ok = ensure_ra_system_started(?RA_SYSTEM),
+    ?LOG_DEBUG("Starting Khepri-based metadata store"),
+    ok = ensure_ra_system_started(),
     case khepri:start(?RA_SYSTEM, ?RA_CLUSTER_NAME, ?RA_FRIENDLY_NAME) of
         {ok, ?STORE_NAME} ->
             ?LOG_DEBUG(
@@ -93,7 +98,7 @@ add_member(NewNode) when NewNode =/= node() ->
                        "Adding remote node ~s to Khepri cluster \"~s\"",
                        [NewNode, ?RA_CLUSTER_NAME],
                        #{domain => ?RMQLOG_DOMAIN_GLOBAL}),
-                    ok = ensure_ra_system_started(?RA_SYSTEM),
+                    ok = ensure_ra_system_started(),
                     Ret2 = khepri:add_member(
                              ?RA_SYSTEM, ?RA_CLUSTER_NAME, ?RA_FRIENDLY_NAME,
                              NewNode),
@@ -131,42 +136,11 @@ add_member(NewNode) when NewNode =/= node() ->
 priv_reset() ->
     ok = rabbit:stop(),
     {ok, _} = application:ensure_all_started(khepri),
-    ok = ensure_ra_system_started(?RA_SYSTEM),
+    ok = ensure_ra_system_started(),
     ok = khepri:reset(?RA_SYSTEM, ?RA_CLUSTER_NAME).
 
-ensure_ra_system_started(RaSystem) ->
-    Default = ra_system:default_config(),
-    MDStoreDir = filename:join(
-                   [rabbit_mnesia:dir(), "metadata_store", node()]),
-    RaSystemConfig = Default#{name => RaSystem,
-                              data_dir => MDStoreDir,
-                              wal_data_dir => MDStoreDir,
-                              wal_max_size_bytes => 1024 * 1024,
-                              names => ra_system:derive_names(RaSystem)},
-    ?LOG_DEBUG(
-       "Starting Ra system for Khepri with configuration:~n~p",
-       [RaSystemConfig],
-       #{domain => ?RMQLOG_DOMAIN_GLOBAL}),
-    case ra_system:start(RaSystemConfig) of
-        {ok, _} ->
-            ?LOG_DEBUG(
-               "Ra system for Khepri ready",
-               [],
-               #{domain => ?RMQLOG_DOMAIN_GLOBAL}),
-            ok;
-        {error, {already_started, _}} ->
-            ?LOG_DEBUG(
-               "Ra system for Khepri ready",
-               [],
-               #{domain => ?RMQLOG_DOMAIN_GLOBAL}),
-            ok;
-        Error ->
-            ?LOG_ERROR(
-               "Failed to start Ra system for Khepri: ~p",
-               [Error],
-               #{domain => ?RMQLOG_DOMAIN_GLOBAL}),
-            throw(Error)
-    end.
+ensure_ra_system_started() ->
+    ok = rabbit_ra_systems:ensure_ra_system_started(?RA_SYSTEM).
 
 members() ->
     khepri:members(?RA_CLUSTER_NAME).
