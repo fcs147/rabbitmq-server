@@ -202,12 +202,12 @@ do_add_to_khepri(Name, Description, Tags) ->
     Path = khepri_vhost_path(Name),
     NewVHost = vhost:new(
                  Name, [], #{description => Description, tags => Tags}),
-    Ret = rabbit_khepri:insert(
-            Path, NewVHost, [#if_node_exists{exists = false}]),
-    case Ret of
-        {ok, _} ->
+    case rabbit_khepri:create(Path, NewVHost) of
+        ok ->
             NewVHost;
-        {error, {mismatching_node, Path, ExistingVHost, _}} ->
+        {error, {mismatching_node,
+                 #{node_path := Path,
+                   props_and_data := #{data := ExistingVHost}}}} ->
             ExistingVHost;
         Error ->
             throw(Error)
@@ -429,7 +429,7 @@ internal_delete_in_mnesia_part2(VHost) ->
 
 internal_delete_in_khepri(VHost) ->
     Path = khepri_vhost_path(VHost),
-    {ok, _} = rabbit_khepri:delete(Path),
+    ok = rabbit_khepri:delete(Path),
     ok.
 
 -spec exists(vhost:name()) -> boolean().
@@ -457,8 +457,8 @@ list_names_in_mnesia() ->
 
 list_names_in_khepri() ->
     Path = khepri_vhosts_path(),
-    case rabbit_khepri:list_with_props(Path) of
-        {ok, Result} -> [lists:last(P) || P <- maps:keys(Result)];
+    case rabbit_khepri:list_child_nodes(Path) of
+        {ok, Result} -> Result;
         _            -> []
     end.
 
@@ -476,10 +476,10 @@ all_in_mnesia() ->
     mnesia:dirty_match_object(rabbit_vhost, vhost:pattern_match_all()).
 
 all_in_khepri() ->
-    Path = khepri_vhosts_path(),
-    case rabbit_khepri:list_matching(Path, vhost:pattern_match_all()) of
-        {ok, List} -> List;
-        _          -> []
+    Path = khepri_vhosts_path() ++ [vhost:pattern_match_all()],
+    case rabbit_khepri:list_child_data(Path) of
+        {ok, VHosts} -> maps:values(VHosts);
+        _            -> []
     end.
 
 -spec all_tagged_with(atom()) -> [vhost:vhost()].
@@ -512,7 +512,7 @@ lookup_in_mnesia(VHostName) ->
 
 lookup_in_khepri(VHostName) ->
     Path = khepri_vhost_path(VHostName),
-    case rabbit_khepri:get(Path) of
+    case rabbit_khepri:get_data(Path) of
         {ok, Record} -> Record;
         _            -> {error, {no_such_vhost, VHostName}}
     end.
@@ -533,9 +533,9 @@ with_in_mnesia(VHostName, Thunk) ->
 
 with_in_khepri(VHostName, Thunk) ->
     Path = khepri_vhost_path(VHostName),
-    case rabbit_khepri:get(Path) of
-        {ok, _} -> Thunk();
-        _       -> mnesia:abort({no_such_vhost, VHostName})
+    case rabbit_khepri:exists(Path) of
+        true  -> Thunk();
+        false -> mnesia:abort({no_such_vhost, VHostName})
     end.
 
 -spec with_user_and_vhost(rabbit_types:username(), vhost:name(), rabbit_misc:thunk(A)) -> A.
@@ -569,15 +569,15 @@ update_in_mnesia(VHostName, Fun) ->
 
 update_in_khepri(VHostName, Fun) ->
     Path = khepri_vhost_path(VHostName),
-    case rabbit_khepri:get_with_props(Path) of
-        {ok, #{Path := #{data := V, data_version := DVersion}}} ->
+    case rabbit_khepri:get(Path) of
+        {ok, #{data := V, data_version := DVersion}} ->
             V1 = Fun(V),
-            Ret = rabbit_khepri:insert(
-                    Path, V1, #if_data_version{version = DVersion}),
-            case Ret of
-                {ok, _} ->
+            Path1 = khepri_path:combine_with_conditions(
+                      Path, [#if_data_version{version = DVersion}]),
+            case rabbit_khepri:insert(Path1, V1) of
+                ok ->
                     V1;
-                {error, {mismatching_node, _, _, _}} ->
+                {error, {mismatching_node, _}} ->
                     update(VHostName, Fun);
                 Error ->
                     throw(Error)
@@ -722,24 +722,24 @@ info_all(Items, Ref, AggregatorPid) ->
 clear_data_in_khepri() ->
     Path = khepri_vhosts_path(),
     case rabbit_khepri:delete(Path) of
-        {ok, _} -> ok;
-        Error   -> throw(Error)
+        ok    -> ok;
+        Error -> throw(Error)
     end.
 
 mnesia_write_to_khepri(VHost) when ?is_vhost(VHost) ->
     Name = vhost:get_name(VHost),
     Path = khepri_vhost_path(Name),
     case rabbit_khepri:insert(Path, VHost) of
-        {ok, _} -> ok;
-        Error   -> throw(Error)
+        ok    -> ok;
+        Error -> throw(Error)
     end.
 
 mnesia_delete_to_khepri(VHost) when ?is_vhost(VHost) ->
     Name = vhost:get_name(VHost),
     Path = khepri_vhost_path(Name),
     case rabbit_khepri:delete(Path) of
-        {ok, _} -> ok;
-        Error   -> throw(Error)
+        ok    -> ok;
+        Error -> throw(Error)
     end.
 
 khepri_vhosts_path()     -> [?MODULE].

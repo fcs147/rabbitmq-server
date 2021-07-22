@@ -9,6 +9,7 @@
 
 -include_lib("kernel/include/logger.hrl").
 
+-include_lib("khepri/include/khepri.hrl").
 -include_lib("rabbit_common/include/logging.hrl").
 
 -export([setup/0,
@@ -19,19 +20,26 @@
          nodes/0,
          locally_known_nodes/0,
          get_store_id/0,
-         machine_insert/3,
+
+         create/2,
          insert/2,
-         insert/3,
-         match/1,
-         match_with_props/1,
+         update/2,
+         cas/3,
+
          get/1,
-         get_with_props/1,
+         get_data/1,
+         match/1,
+         match_and_get_data/1,
          exists/1,
+         find/1,
          list/1,
-         list_with_props/1,
-         list_matching/2,
-         list_matching_with_props/2,
+         list_child_nodes/1,
+         list_child_data/1,
+
+         put/2, put/3,
+         clear_data/1,
          delete/1,
+
          dir/0,
          info/0,
          is_enabled/0,
@@ -39,12 +47,12 @@
          try_mnesia_or_khepri/2]).
 -export([priv_reset/0]).
 
--compile({no_auto_import, [get/2]}).
+-compile({no_auto_import, [get/1, get/2]}).
 
 -define(RA_SYSTEM, coordination).
 -define(RA_CLUSTER_NAME, metadata_store).
 -define(RA_FRIENDLY_NAME, "RabbitMQ metadata store").
--define(STORE_NAME, ?RA_CLUSTER_NAME).
+-define(STORE_ID, ?RA_CLUSTER_NAME).
 -define(MDSTORE_SARTUP_LOCK, {?MODULE, self()}).
 -define(PT_KEY, ?MODULE).
 
@@ -63,7 +71,7 @@ setup(_) ->
     ?LOG_DEBUG("Starting Khepri-based metadata store"),
     ok = ensure_ra_system_started(),
     case khepri:start(?RA_SYSTEM, ?RA_CLUSTER_NAME, ?RA_FRIENDLY_NAME) of
-        {ok, ?STORE_NAME} ->
+        {ok, ?STORE_ID} ->
             ?LOG_DEBUG(
                "Khepri-based metadata store ready",
                [],
@@ -155,56 +163,92 @@ locally_known_nodes() ->
     khepri:locally_known_nodes(?RA_CLUSTER_NAME).
 
 get_store_id() ->
-    ?STORE_NAME.
+    ?STORE_ID.
 
 dir() ->
-    filename:join(rabbit_mnesia:dir(), atom_to_list(?STORE_NAME)).
+    filename:join(rabbit_mnesia:dir(), atom_to_list(?STORE_ID)).
 
-machine_insert(PathPattern, Data, Extra) ->
-    khepri_machine:insert(?STORE_NAME, PathPattern, Data, Extra).
+%% -------------------------------------------------------------------
+%% "Proxy" functions to Khepri API.
+%% -------------------------------------------------------------------
 
-insert(Path, Data) ->
-    khepri:insert(?STORE_NAME, Path, Data).
+%% They just add the store ID to every calls.
+%%
+%% The only exceptions are get() and match() which both call khepri:get()
+%% behind the scene with different options.
+%%
+%% They are some additional functions too, because they are useful in RabbitMQ.
+%% They might be moved to Khepri in the future.
 
-insert(Path, Data, Conditions) ->
-    khepri:insert(?STORE_NAME, Path, Data, Conditions).
+create(Path, Data) -> khepri:create(?STORE_ID, Path, Data).
+insert(Path, Data) -> khepri:insert(?STORE_ID, Path, Data).
+update(Path, Data) -> khepri:update(?STORE_ID, Path, Data).
+cas(Path, Pattern, Data) ->
+    khepri:compare_and_swap(?STORE_ID, Path, Pattern, Data).
 
 get(Path) ->
-    khepri:get(?STORE_NAME, Path).
-
-get_with_props(Path) ->
-    khepri:get_with_props(?STORE_NAME, Path).
-
-match(Path) ->
-    khepri:match(?STORE_NAME, Path).
-
-match_with_props(Path) ->
-    khepri:match_with_props(?STORE_NAME, Path).
-
-exists(Path) ->
-    case match(Path) of
-        {ok, #{Path := _}} -> true;
-        _                  -> false
+    case khepri:get(?STORE_ID, Path, #{expect_specific_node => true}) of
+        {ok, Result} ->
+            [PropsAndData] = maps:values(Result),
+            {ok, PropsAndData};
+        Error ->
+            Error
     end.
 
-list(Path) ->
-    khepri:list(?STORE_NAME, Path).
+get_data(Path) ->
+    case get(Path) of
+        {ok, #{data := Data}} -> {ok, Data};
+        {ok, Result}          -> {error, {no_data, Result}};
+        Error                 -> Error
+    end.
 
-list_matching(Path, Pattern) ->
-    khepri:list_matching(?STORE_NAME, Path, Pattern).
+match(Path) -> khepri:get(?STORE_ID, Path).
 
-list_matching_with_props(Path, Pattern) ->
-    khepri:list_matching_with_props(?STORE_NAME, Path, Pattern).
+match_and_get_data(Path) ->
+    Ret = match(Path),
+    keep_data_only(Ret).
 
-list_with_props(Path) ->
-    khepri:list_with_props(?STORE_NAME, Path).
+exists(Path) -> khepri:exists(?STORE_ID, Path).
+find(Path) -> khepri:find(?STORE_ID, Path).
+list(Path) -> khepri:list(?STORE_ID, Path).
 
-delete(Path) ->
-    khepri:delete(?STORE_NAME, Path).
+list_child_nodes(Path) ->
+    Options = #{expect_specific_node => true,
+                include_child_names => true},
+    case khepri:get(?STORE_ID, Path, Options) of
+        {ok, Result} ->
+            [#{child_names := ChildNames}] = maps:values(Result),
+            {ok, ChildNames};
+        Error ->
+            Error
+    end.
+
+list_child_data(Path) ->
+    Ret = list(Path),
+    keep_data_only(Ret).
+
+keep_data_only({ok, Result}) ->
+    Result1 = maps:fold(
+                fun
+                    (Path, #{data := Data}, Acc) -> Acc#{Path => Data};
+                    (_, _, Acc)                  -> Acc
+                end, #{}, Result),
+    {ok, Result1};
+keep_data_only(Error) ->
+    Error.
+
+clear_data(Path) -> khepri:clear_data(?STORE_ID, Path).
+delete(Path) -> khepri:delete(?STORE_ID, Path).
+
+put(PathPattern, Data) ->
+    khepri_machine:put(?STORE_ID, PathPattern, ?DATA_PAYLOAD(Data)).
+
+put(PathPattern, Data, Extra) ->
+    khepri_machine:put(?STORE_ID, PathPattern, ?DATA_PAYLOAD(Data), Extra).
 
 info() ->
     ok = setup(),
-    khepri:info(?STORE_NAME).
+    khepri:info(?STORE_ID).
 
 %% -------------------------------------------------------------------
 %% Raft-based metadata store (phase 1).

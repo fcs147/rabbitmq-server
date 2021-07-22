@@ -152,10 +152,7 @@ check_vhost_access_in_mnesia(Username, VHostPath) ->
 
 check_vhost_access_in_khepri(Username, VHostPath) ->
     Path = khepri_user_permission_path(Username, VHostPath),
-    case rabbit_khepri:get(Path) of
-        {ok, _} -> true;
-        _       -> false
-    end.
+    rabbit_khepri:exists(Path).
 
 check_resource_access(#auth_user{username = Username},
                       #resource{virtual_host = VHostPath, name = Name},
@@ -183,7 +180,7 @@ check_resource_access_in_mnesia(Username, VHostPath, Name, Permission) ->
 
 check_resource_access_in_khepri(Username, VHostPath, Name, Permission) ->
     Path = khepri_user_permission_path(Username, VHostPath),
-    case rabbit_khepri:get(Path) of
+    case rabbit_khepri:get_data(Path) of
         {ok, #user_permission{permission = P}} ->
             do_check_resource_access(Name, Permission, P);
         _ ->
@@ -228,7 +225,7 @@ check_topic_access_in_mnesia(
 check_topic_access_in_khepri(
   Username, VHostPath, Name, Permission, Context) ->
     Path = khepri_topic_permission_path(Username, VHostPath, Name),
-    case rabbit_khepri:get(Path) of
+    case rabbit_khepri:get_data(Path) of
         {ok, #topic_permission{permission = P}} ->
             do_check_topic_access(Permission, Context, P);
         _ ->
@@ -328,10 +325,10 @@ add_user_sans_validation_in_mnesia(Username, User) ->
 
 add_user_sans_validation_in_khepri(Username, User) ->
     Path = khepri_user_path(Username),
-    case rabbit_khepri:insert(Path, User, [#if_node_exists{exists = false}]) of
-        {ok, _} ->
+    case rabbit_khepri:create(Path, User) of
+        ok ->
             ok;
-        {error, {mismatching_node, _, _, _}} ->
+        {error, {mismatching_node, _}} ->
             throw({error, {user_already_exists, Username}});
         {error, _} = Error ->
             throw(Error)
@@ -386,7 +383,7 @@ delete_user_in_mnesia(Username) ->
 delete_user_in_khepri(Username) ->
     Path = khepri_user_path(Username),
     case rabbit_khepri:delete(Path) of
-        {ok, _} ->
+        ok ->
             ok;
         {error, {node_not_found, _}} ->
             throw({error, {no_such_user, Username}});
@@ -409,11 +406,9 @@ lookup_user_in_mnesia(Username) ->
 
 lookup_user_in_khepri(Username) ->
     Path = khepri_user_path(Username),
-    case rabbit_khepri:get(Path) of
-        {ok, User} ->
-            {ok, User};
-        _ ->
-            {error, not_found}
+    case rabbit_khepri:get_data(Path) of
+        {ok, User} -> {ok, User};
+        _          -> {error, not_found}
     end.
 
 -spec exists(rabbit_types:username()) -> boolean().
@@ -597,10 +592,10 @@ set_permissions_in_khepri(Username, VirtualHost, UserPermission) ->
     %% TODO: Add a keep_until for the intermediate 'user_permissions' node so
     %% it is removed when its last children is removed.
     Extra = #{keep_until => [rabbit_vhost:khepri_vhost_path(VirtualHost)]},
-    case rabbit_khepri:machine_insert(Path, UserPermission, Extra) of
+    case rabbit_khepri:put(Path, UserPermission, Extra) of
         {ok, _} ->
             ok;
-        {error, {node_not_found, Path1}} ->
+        {error, {node_not_found, #{node_path := Path1}}} ->
             case is_path_to(Path1) of
                 {user, _} -> throw({error, {no_such_user, Username}});
                 _         -> throw({error, {no_such_vhost, VirtualHost}})
@@ -657,9 +652,9 @@ clear_permissions_in_mnesia(Username, VirtualHost) ->
 clear_permissions_in_khepri(Username, VirtualHost) ->
     Path = khepri_user_permission_path(Username, VirtualHost),
     case rabbit_khepri:delete(Path) of
-        {ok, _} ->
+        ok ->
             ok;
-        {error, {node_not_found, Path1}} ->
+        {error, {node_not_found, #{node_path := Path1}}} ->
             case is_path_to(Path1) of
                 {user, _} -> throw({error, {no_such_user, Username}});
                 _         -> throw({error, {no_such_vhost, VirtualHost}})
@@ -684,16 +679,17 @@ update_user_in_mnesia(Username, Fun) ->
 
 update_user_in_khepri(Username, Fun) ->
     Path = khepri_user_path(Username),
-    Ret1 = rabbit_khepri:get_with_props(Path),
+    Ret1 = rabbit_khepri:get(Path),
     case Ret1 of
         {ok, #{data := User, data_version := DVersion}} ->
             User1 = Fun(User),
-            Ret2 = rabbit_khepri:insert(
-                     Path, User1, [#if_data_version{version = DVersion}]),
+            Path1 = khepri_path:combine_with_conditions(
+                      Path, [#if_data_version{version = DVersion}]),
+            Ret2 = rabbit_khepri:insert(Path1, User1),
             case Ret2 of
-                {ok, _} ->
+                ok ->
                     ok;
-                {error, {mismatching_node, Path, _, _}} ->
+                {error, {mismatching_node, #{node_path := Path}}} ->
                     update_user_in_khepri(Username, Fun);
                 {error, _} = Error ->
                     throw(Error)
@@ -793,10 +789,10 @@ set_topic_permissions_in_khepri(
     %% TODO: Add a keep_until for the intermediate 'topic_permissions' node so
     %% it is removed when its last children is removed.
     Extra = #{keep_until => [rabbit_vhost:khepri_vhost_path(VirtualHost)]},
-    case rabbit_khepri:machine_insert(Path, TopicPermission, Extra) of
+    case rabbit_khepri:put(Path, TopicPermission, Extra) of
         {ok, _} ->
             ok;
-        {error, {node_not_found, Path1}} ->
+        {error, {node_not_found, #{node_path := Path1}}} ->
             case is_path_to(Path1) of
                 {user, _} -> throw({error, {no_such_user, Username}});
                 _         -> throw({error, {no_such_vhost, VirtualHost}})
@@ -859,9 +855,9 @@ clear_topic_permissions_in_khepri(Username, VirtualHost) ->
     Path = khepri_topic_permission_path(
              Username, VirtualHost, #if_name_matches{regex = any}),
     case rabbit_khepri:delete(Path) of
-        {ok, _} ->
+        ok ->
             ok;
-        {error, {node_not_found, Path1}} ->
+        {error, {node_not_found, #{node_path := Path1}}} ->
             case is_path_to(Path1) of
                 {user, _} -> throw({error, {no_such_user, Username}});
                 _         -> throw({error, {no_such_vhost, VirtualHost}})
@@ -925,9 +921,9 @@ clear_topic_permissions_in_mnesia(Username, VirtualHost, Exchange) ->
 clear_topic_permissions_in_khepri(Username, VirtualHost, Exchange) ->
     Path = khepri_topic_permission_path(Username, VirtualHost, Exchange),
     case rabbit_khepri:delete(Path) of
-        {ok, _} ->
+        ok ->
             ok;
-        {error, {node_not_found, Path1}} ->
+        {error, {node_not_found, #{node_path := Path1}}} ->
             case is_path_to(Path1) of
                 {user, _} -> throw({error, {no_such_user, Username}});
                 _         -> throw({error, {no_such_vhost, VirtualHost}})
@@ -1155,7 +1151,7 @@ all_users_in_mnesia() ->
 
 all_users_in_khepri() ->
     Path = khepri_users_path(),
-    case rabbit_khepri:list(Path) of
+    case rabbit_khepri:list_child_data(Path) of
         {ok, Users} -> maps:values(Users);
         _           -> []
     end.
@@ -1192,7 +1188,7 @@ list_permissions_in_mnesia(QueryThunk) ->
     rabbit_misc:execute_mnesia_transaction(QueryThunk).
 
 list_permissions_in_khepri(Path) ->
-    case rabbit_khepri:match(Path) of
+    case rabbit_khepri:match_and_get_data(Path) of
         {ok, UserPermissions} -> maps:values(UserPermissions);
         _                     -> []
     end.
@@ -1331,7 +1327,7 @@ list_topic_permissions_in_mnesia(QueryThunk) ->
     rabbit_misc:execute_mnesia_transaction(QueryThunk).
 
 list_topic_permissions_in_khepri(Path) ->
-    case rabbit_khepri:match(Path) of
+    case rabbit_khepri:match_and_get_data(Path) of
         {ok, TopicPermissions} -> maps:values(TopicPermissions);
         _                      -> []
     end.
@@ -1442,16 +1438,16 @@ notify_limit_clear(Username, ActingUser) ->
 clear_data_in_khepri() ->
     Path = khepri_users_path(),
     case rabbit_khepri:delete(Path) of
-        {ok, _} -> ok;
-        Error   -> throw(Error)
+        ok    -> ok;
+        Error -> throw(Error)
     end.
 
 mnesia_write_to_khepri(User) when ?is_internal_user(User) ->
     Username = internal_user:get_username(User),
     Path = khepri_user_path(Username),
     case rabbit_khepri:insert(Path, User) of
-        {ok, _} -> ok;
-        Error   -> throw(Error)
+        ok    -> ok;
+        Error -> throw(Error)
     end;
 mnesia_write_to_khepri(
   #user_permission{
@@ -1464,7 +1460,7 @@ mnesia_write_to_khepri(
                       #if_node_exists{exists = true}]},
              VHost),
     Extra = #{keep_until => [rabbit_vhost:khepri_vhost_path(VHost)]},
-    case rabbit_khepri:machine_insert(Path, UserPermission, Extra) of
+    case rabbit_khepri:put(Path, UserPermission, Extra) of
         {ok, _} -> ok;
         Error   -> throw(Error)
     end;
@@ -1483,7 +1479,7 @@ mnesia_write_to_khepri(
              VHost,
              Exchange),
     Extra = #{keep_until => [rabbit_vhost:khepri_vhost_path(VHost)]},
-    case rabbit_khepri:machine_insert(Path, TopicPermission, Extra) of
+    case rabbit_khepri:put(Path, TopicPermission, Extra) of
         {ok, _} -> ok;
         Error   -> throw(Error)
     end.
@@ -1492,8 +1488,8 @@ mnesia_delete_to_khepri(User) when ?is_internal_user(User) ->
     Username = internal_user:get_username(User),
     Path = khepri_user_path(Username),
     case rabbit_khepri:delete(Path) of
-        {ok, _} -> ok;
-        Error   -> throw(Error)
+        ok    -> ok;
+        Error -> throw(Error)
     end;
 mnesia_delete_to_khepri(
   #user_permission{
@@ -1502,8 +1498,8 @@ mnesia_delete_to_khepri(
                      virtual_host = VHost}}) ->
     Path = khepri_user_permission_path(Username, VHost),
     case rabbit_khepri:delete(Path) of
-        {ok, _} -> ok;
-        Error   -> throw(Error)
+        ok    -> ok;
+        Error -> throw(Error)
     end;
 mnesia_delete_to_khepri(
   #topic_permission{
@@ -1515,8 +1511,8 @@ mnesia_delete_to_khepri(
         exchange = Exchange}}) ->
     Path = khepri_topic_permission_path(Username, VHost, Exchange),
     case rabbit_khepri:delete(Path) of
-        {ok, _} -> ok;
-        Error   -> throw(Error)
+        ok    -> ok;
+        Error -> throw(Error)
     end.
 
 khepri_users_path()        -> [?MODULE, users].

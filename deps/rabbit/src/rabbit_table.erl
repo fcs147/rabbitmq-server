@@ -314,6 +314,10 @@ definitions(ram) ->
         {Tab, TabDef} <- definitions()].
 
 definitions() ->
+    PreKhepriDefs = case rabbit_khepri:is_enabled(non_blocking) of
+                        true  -> [];
+                        false -> pre_khepri_definitions()
+                    end,
     [{rabbit_listener,
       [{record_name, listener},
        {attributes, record_info(fields, listener)},
@@ -384,42 +388,37 @@ definitions() ->
        {attributes, amqqueue:fields()},
        {match, amqqueue:pattern_match_on_name(queue_name_match())}]}
     ]
-        ++ pre_khepri_definitions()
+        ++ PreKhepriDefs
         ++ gm:table_definitions()
         ++ mirrored_supervisor:table_definitions().
 
 pre_khepri_definitions() ->
-    case rabbit_khepri:is_enabled(non_blocking) of
-        true ->
-            [];
-        false ->
-            [{rabbit_user,
-              [{record_name, internal_user},
-               {attributes, internal_user:fields()},
-               {disc_copies, [node()]},
-               {match, internal_user:pattern_match_all()}]},
-             {rabbit_user_permission,
-              [{record_name, user_permission},
-               {attributes, record_info(fields, user_permission)},
-               {disc_copies, [node()]},
-               {match, #user_permission{user_vhost = #user_vhost{_='_'},
-                                        permission = #permission{_='_'},
-                                        _='_'}}]},
-             {rabbit_topic_permission,
-              [{record_name, topic_permission},
-               {attributes, record_info(fields, topic_permission)},
-               {disc_copies, [node()]},
-               {match, #topic_permission{topic_permission_key = #topic_permission_key{_='_'},
-                                         permission = #permission{_='_'},
-                                         _='_'}}]},
-             {rabbit_vhost,
-              [
-               {record_name, vhost},
-               {attributes, vhost:fields()},
-               {disc_copies, [node()]},
-               {match, vhost:pattern_match_all()}]}
-            ]
-    end.
+    [{rabbit_user,
+      [{record_name, internal_user},
+       {attributes, internal_user:fields()},
+       {disc_copies, [node()]},
+       {match, internal_user:pattern_match_all()}]},
+     {rabbit_user_permission,
+      [{record_name, user_permission},
+       {attributes, record_info(fields, user_permission)},
+       {disc_copies, [node()]},
+       {match, #user_permission{user_vhost = #user_vhost{_='_'},
+                                permission = #permission{_='_'},
+                                _='_'}}]},
+     {rabbit_topic_permission,
+      [{record_name, topic_permission},
+       {attributes, record_info(fields, topic_permission)},
+       {disc_copies, [node()]},
+       {match, #topic_permission{topic_permission_key = #topic_permission_key{_='_'},
+                                 permission = #permission{_='_'},
+                                 _='_'}}]},
+     {rabbit_vhost,
+      [
+       {record_name, vhost},
+       {attributes, vhost:fields()},
+       {disc_copies, [node()]},
+       {match, vhost:pattern_match_all()}]}
+    ].
 
 binding_match() ->
     #binding{source = exchange_name_match(),
