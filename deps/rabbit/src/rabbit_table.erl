@@ -19,6 +19,10 @@
 
 -include_lib("rabbit_common/include/rabbit.hrl").
 
+-ifdef(TEST).
+-export([pre_khepri_definitions/0]).
+-endif.
+
 %%----------------------------------------------------------------------------
 
 -type retry() :: boolean().

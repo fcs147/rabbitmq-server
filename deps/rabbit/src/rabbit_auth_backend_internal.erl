@@ -53,6 +53,15 @@
 %% for testing
 -export([hashing_module_for_user/1, expand_topic_permission/2]).
 
+-ifdef(TEST).
+-export([lookup_user_in_mnesia/1,
+         lookup_user_in_khepri/1,
+         add_user_sans_validation_in_mnesia/2,
+         add_user_sans_validation_in_khepri/2,
+         delete_user_in_mnesia/1,
+         delete_user_in_khepri/1]).
+-endif.
+
 -import(rabbit_data_coercion, [to_atom/1, to_list/1, to_binary/1]).
 
 %%----------------------------------------------------------------------------
@@ -382,11 +391,11 @@ delete_user_in_mnesia(Username) ->
 
 delete_user_in_khepri(Username) ->
     Path = khepri_user_path(Username),
-    case rabbit_khepri:delete(Path) of
+    case rabbit_khepri:delete_or_fail(Path) of
         ok ->
             ok;
         {error, {node_not_found, _}} ->
-            throw({error, {no_such_user, Username}});
+            throw({error, {throw, {no_such_user, Username}}});
         {error, _} = Error ->
             throw(Error)
     end.

@@ -39,6 +39,9 @@
          put/2, put/3,
          clear_data/1,
          delete/1,
+         delete_or_fail/1,
+
+         clear_store/0,
 
          dir/0,
          info/0,
@@ -177,8 +180,8 @@ dir() ->
 %% The only exceptions are get() and match() which both call khepri:get()
 %% behind the scene with different options.
 %%
-%% They are some additional functions too, because they are useful in RabbitMQ.
-%% They might be moved to Khepri in the future.
+%% They are some additional functions too, because they are useful in
+%% RabbitMQ. They might be moved to Khepri in the future.
 
 create(Path, Data) -> khepri:create(?STORE_ID, Path, Data).
 insert(Path, Data) -> khepri:insert(?STORE_ID, Path, Data).
@@ -240,11 +243,25 @@ keep_data_only(Error) ->
 clear_data(Path) -> khepri:clear_data(?STORE_ID, Path).
 delete(Path) -> khepri:delete(?STORE_ID, Path).
 
+delete_or_fail(Path) ->
+    case khepri_machine:delete(?STORE_ID, Path) of
+        {ok, Result} ->
+            case maps:size(Result) of
+                0 -> {error, {node_not_found, #{}}};
+                _ -> ok
+            end;
+        Error ->
+            Error
+    end.
+
 put(PathPattern, Data) ->
     khepri_machine:put(?STORE_ID, PathPattern, ?DATA_PAYLOAD(Data)).
 
 put(PathPattern, Data, Extra) ->
     khepri_machine:put(?STORE_ID, PathPattern, ?DATA_PAYLOAD(Data), Extra).
+
+clear_store() ->
+    khepri:clear_store(?STORE_ID).
 
 info() ->
     ok = setup(),
