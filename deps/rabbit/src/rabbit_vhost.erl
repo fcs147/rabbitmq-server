@@ -30,6 +30,11 @@
 -export([khepri_vhosts_path/0,
          khepri_vhost_path/1]).
 
+-ifdef(TEST).
+-export([do_add_to_mnesia/3,
+         do_add_to_khepri/3]).
+-endif.
+
 %%
 %% API
 %%

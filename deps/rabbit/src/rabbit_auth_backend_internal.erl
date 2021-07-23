@@ -59,7 +59,12 @@
          add_user_sans_validation_in_mnesia/2,
          add_user_sans_validation_in_khepri/2,
          delete_user_in_mnesia/1,
-         delete_user_in_khepri/1]).
+         delete_user_in_khepri/1,
+
+         check_vhost_access_in_mnesia/2,
+         check_vhost_access_in_khepri/2,
+         set_permissions_in_mnesia/3,
+         set_permissions_in_khepri/3]).
 -endif.
 
 -import(rabbit_data_coercion, [to_atom/1, to_list/1, to_binary/1]).
@@ -87,8 +92,13 @@ hashing_module_for_user(User) ->
 with_user(Username, Thunk) ->
     fun () ->
             case exists(Username) of
-                true  -> Thunk();
-                false -> throw({no_such_user, Username})
+                true ->
+                    Thunk();
+                false ->
+                    case mnesia:is_transaction() of
+                        true  -> mnesia:abort({no_such_user, Username});
+                        false -> throw({error, {no_such_user, Username}})
+                    end
             end
     end.
 
@@ -395,7 +405,7 @@ delete_user_in_khepri(Username) ->
         ok ->
             ok;
         {error, {node_not_found, _}} ->
-            throw({error, {throw, {no_such_user, Username}}});
+            throw({error, {no_such_user, Username}});
         {error, _} = Error ->
             throw(Error)
     end.
@@ -604,11 +614,10 @@ set_permissions_in_khepri(Username, VirtualHost, UserPermission) ->
     case rabbit_khepri:put(Path, UserPermission, Extra) of
         {ok, _} ->
             ok;
-        {error, {node_not_found, #{node_path := Path1}}} ->
-            case is_path_to(Path1) of
-                {user, _} -> throw({error, {no_such_user, Username}});
-                _         -> throw({error, {no_such_vhost, VirtualHost}})
-            end;
+        {error, {node_not_found, _}} ->
+            throw({error, {no_such_user, Username}});
+        {error, {keep_until_conditions_not_met, _}} ->
+            throw({error, {no_such_vhost, VirtualHost}});
         Error ->
             throw(Error)
     end.
