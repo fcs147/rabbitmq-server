@@ -187,216 +187,131 @@ init_feature_flags(Config) ->
 %% Testcases.
 %% -------------------------------------------------------------------
 
+-define(with(T), fun(With) -> T end).
+
+%%
+%% Users
+%%
+
 write_non_existing_user(_) ->
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
 
-    %% Writing user in Mnesia works.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertEqual(
-       {ok, User},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
-
-    %% Writing user in Khepri works. The return values MUST be idential to
-    %% Mnesia!
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertEqual(
-       {ok, User},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
-
     %% TODO: Check what is actually stored and where.
     %% TODO: Check that the other storage is not modified at the same time.
 
-    ok.
+    Tests =
+    [
+     ?with(?assertEqual(ok, add_user(With, Username, User))),
+     ?with(?assertEqual({ok, User}, lookup_user(With, Username)))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 write_existing_user(_) ->
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
-    DuplicateUser = internal_user:create_user(
-                      Username, <<"other-password">>, undefined),
 
-    %% Writing user twice in Mnesia is rejected. When we read the user again,
-    %% we get the first version.
-    mock_disabled_feature_flag(),
+    Tests =
+    [
+     ?with(?assertEqual(ok, add_user(With, Username, User))),
+     ?with(?assertThrow({error, {user_already_exists, Username}},
+                        add_user(With, Username, User))),
+     ?with(?assertEqual({ok, User}, lookup_user(With, Username)))
+    ],
+
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertThrow(
-       {error, {user_already_exists, Username}},
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, DuplicateUser)),
-    ?assertEqual(
-       {ok, User},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
-
-    %% Writing user twice in Khepri is rejected. When we read the user again,
-    %% we get the first version. The return values MUST be idential to Mnesia!
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertThrow(
-       {error, {user_already_exists, Username}},
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, DuplicateUser)),
-    ?assertEqual(
-       {ok, User},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
-
-    ok.
-
-delete_non_existing_user(_) ->
-    Username = <<"alice">>,
-
-    %% We first ensure the user doesn't exist in Mnesia, then we try to delete
-    %% it.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
-    ?assertThrow(
-       {error, {no_such_user, Username}},
-       rabbit_auth_backend_internal:delete_user_in_mnesia(Username)),
-    ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
-
-    %% We first ensure the user doesn't exist in Khepri, then we try to delete
-    %% it. The return values MUST be idential to Mnesia!
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
-    ?assertThrow(
-       {error, {no_such_user, Username}},
-       rabbit_auth_backend_internal:delete_user_in_khepri(Username)),
-    ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 update_non_existing_user(_) ->
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
-    UpdatedUser = internal_user:set_password_hash(User, <<"updated-pw">>, undefined),
+    UpdatedUser = internal_user:set_password_hash(
+                    User, <<"updated-pw">>, undefined),
     Fun = fun(_) -> UpdatedUser end,
 
-    %% Updating a non-existing user in Mnesia throws an exception.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
-    ?assertThrow(
-       {error, {no_such_user, Username}},
-       rabbit_auth_backend_internal:update_user_in_mnesia(Username, Fun)),
-    ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
+    Tests =
+    [
+     ?with(?assertEqual({error, not_found}, lookup_user(With, Username))),
+     ?with(?assertThrow({error, {no_such_user, Username}},
+                        update_user(With, Username, Fun))),
+     ?with(?assertEqual({error, not_found}, lookup_user(With, Username)))
+    ],
 
-    %% Updating a non-existing user in Khepri throws an exception.
-    mock_enabled_feature_flag(),
     ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
-    ?assertThrow(
-       {error, {no_such_user, Username}},
-       rabbit_auth_backend_internal:update_user_in_khepri(Username, Fun)),
-    ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
-
-    ok.
+       ok,
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 update_existing_user(_) ->
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
-    UpdatedUser = internal_user:set_password_hash(User, <<"updated-pw">>, undefined),
+    UpdatedUser = internal_user:set_password_hash(
+                    User, <<"updated-pw">>, undefined),
     Fun = fun(_) -> UpdatedUser end,
 
-    %% Updating a existing user in Mnesia works.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertEqual(
-       {ok, User},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:update_user_in_mnesia(Username, Fun)),
-    ?assertEqual(
-       {ok, UpdatedUser},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
+    Tests =
+    [
+     ?with(?assertEqual(ok, add_user(With, Username, User))),
+     ?with(?assertEqual({ok, User}, lookup_user(With, Username))),
+     ?with(?assertEqual(ok, update_user(With, Username, Fun))),
+     ?with(?assertEqual({ok, UpdatedUser}, lookup_user(With, Username)))
+    ],
 
-    %% Updating a existing user in Khepri works.
-    mock_enabled_feature_flag(),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertEqual(
-       {ok, User},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:update_user_in_khepri(Username, Fun)),
-    ?assertEqual(
-       {ok, UpdatedUser},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
-    ok.
+delete_non_existing_user(_) ->
+    Username = <<"alice">>,
+
+    Tests =
+    [
+     ?with(?assertEqual({error, not_found}, lookup_user(With, Username))),
+     ?with(?assertThrow({error, {no_such_user, Username}},
+                        delete_user(With, Username))),
+     ?with(?assertEqual({error, not_found}, lookup_user(With, Username)))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 delete_existing_user(_) ->
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
 
-    %% We write a user to Mnesia and delete it: it must exist before the
-    %% deletion but not after.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertEqual(
-       {ok, User},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:delete_user_in_mnesia(Username)),
-    ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_mnesia(Username)),
+    Tests =
+    [
+     ?with(?assertEqual(ok, add_user(With, Username, User))),
+     ?with(?assertEqual({ok, User}, lookup_user(With, Username))),
+     ?with(?assertEqual(ok, delete_user(With, Username))),
+     ?with(?assertEqual({error, not_found}, lookup_user(With, Username)))
+    ],
 
-    %% We write a user to Khepri and delete it: it must exist before the
-    %% deletion but not after. The return values MUST be idential to Mnesia!
-    mock_enabled_feature_flag(),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertEqual(
-       {ok, User},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:delete_user_in_khepri(Username)),
-    ?assertEqual(
-       {error, not_found},
-       rabbit_auth_backend_internal:lookup_user_in_khepri(Username)),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 %%
 %% User permissions
@@ -415,41 +330,22 @@ write_user_permission_for_non_existing_vhost(_) ->
                                         write      = <<>>,
                                         read       = <<>>}},
 
-    %% Writing user permissions in Mnesia works.
-    mock_disabled_feature_flag(),
+    Tests =
+    [
+     ?with(?assertEqual(ok, add_user(With, Username, User))),
+     ?with(?assertNot(check_vhost_access(With, Username, VHostName))),
+     ?with(?assertThrow({error, {no_such_vhost, VHostName}},
+                        set_permissions(
+                          With, Username, VHostName, UserPermission))),
+     ?with(?assertNot(check_vhost_access(With, Username, VHostName)))
+    ],
+
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
-         Username, VHostName)),
-    ?assertThrow(
-       {error, {no_such_vhost, VHostName}},
-       rabbit_auth_backend_internal:set_permissions_in_mnesia(
-         Username, VHostName, UserPermission)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
-         Username, VHostName)),
-
-    %% Writing user permissions in Khepri works.
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_khepri(
-         Username, VHostName)),
-    ?assertThrow(
-       {error, {no_such_vhost, VHostName}},
-       rabbit_auth_backend_internal:set_permissions_in_khepri(
-         Username, VHostName, UserPermission)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_khepri(
-         Username, VHostName)),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 write_user_permission_for_non_existing_user(_) ->
     VHostName = <<"vhost">>,
@@ -466,39 +362,23 @@ write_user_permission_for_non_existing_user(_) ->
                                         write      = <<>>,
                                         read       = <<>>}},
 
-    %% Writing user permissions in Mnesia works.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
-         Username, VHostName)),
-    ?assertThrow(
-       {error, {no_such_user, Username}},
-       rabbit_auth_backend_internal:set_permissions_in_mnesia(
-         Username, VHostName, UserPermission)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
-         Username, VHostName)),
+    Tests =
+    [
+     ?with(?assertEqual(VHost,
+                        add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertNot(check_vhost_access(With, Username, VHostName))),
+     ?with(?assertThrow({error, {no_such_user, Username}},
+                        set_permissions(
+                          With, Username, VHostName, UserPermission))),
+     ?with(?assertNot(check_vhost_access(With, Username, VHostName)))
+    ],
 
-    %% Writing user permissions in Khepri works.
-    mock_enabled_feature_flag(),
     ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_khepri(
-         Username, VHostName)),
-    ?assertThrow(
-       {error, {no_such_user, Username}},
-       rabbit_auth_backend_internal:set_permissions_in_khepri(
-         Username, VHostName, UserPermission)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_khepri(
-         Username, VHostName)),
-
-    ok.
+       ok,
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 write_user_permission_for_existing_user(_) ->
     VHostName = <<"vhost">>,
@@ -516,53 +396,25 @@ write_user_permission_for_existing_user(_) ->
                                         write      = <<>>,
                                         read       = <<>>}},
 
-    %% Writing user permissions in Mnesia works.
-    mock_disabled_feature_flag(),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
-         Username, VHostName)),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
-         Username, VHostName)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_permissions_in_mnesia(
-         Username, VHostName, UserPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
-         Username, VHostName)),
+    Tests =
+    [
+     ?with(?assertNot(check_vhost_access(With, Username, VHostName))),
+     ?with(?assertEqual(VHost,
+                        add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(ok, add_user(With, Username, User))),
+     ?with(?assertNot(check_vhost_access(With, Username, VHostName))),
+     ?with(?assertEqual(ok,
+                        set_permissions(
+                          With, Username, VHostName, UserPermission))),
+     ?with(?assert(check_vhost_access(With, Username, VHostName)))
+    ],
 
-    %% Writing user permissions in Khepri works.
-    mock_enabled_feature_flag(),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_khepri(
-         Username, VHostName)),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_khepri(
-         Username, VHostName)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_permissions_in_khepri(
-         Username, VHostName, UserPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_vhost_access_in_khepri(
-         Username, VHostName)),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 check_resource_access(_) ->
     VHostName = <<"vhost">>,
@@ -1237,3 +1089,44 @@ mock_disabled_feature_flag() -> mock_feature_flag_state(false).
 
 mock_feature_flag_state(State) ->
     meck:expect(rabbit_khepri, is_enabled, fun(_) -> State end).
+
+add_vhost(mnesia, VHostName, VHostDesc, VHostTags) ->
+    rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags);
+add_vhost(khepri, VHostName, VHostDesc, VHostTags) ->
+    rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags).
+
+add_user(mnesia, Username, User) ->
+    rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
+      Username, User);
+add_user(khepri, Username, User) ->
+    rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
+      Username, User).
+
+lookup_user(mnesia, Username) ->
+    rabbit_auth_backend_internal:lookup_user_in_mnesia(Username);
+lookup_user(khepri, Username) ->
+    rabbit_auth_backend_internal:lookup_user_in_khepri(Username).
+
+update_user(mnesia, Username, Fun) ->
+    rabbit_auth_backend_internal:update_user_in_mnesia(Username, Fun);
+update_user(khepri, Username, Fun) ->
+    rabbit_auth_backend_internal:update_user_in_khepri(Username, Fun).
+
+delete_user(mnesia, Username) ->
+    rabbit_auth_backend_internal:delete_user_in_mnesia(Username);
+delete_user(khepri, Username) ->
+    rabbit_auth_backend_internal:delete_user_in_khepri(Username).
+
+check_vhost_access(mnesia, Username, VHostName) ->
+    rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
+      Username, VHostName);
+check_vhost_access(khepri, Username, VHostName) ->
+    rabbit_auth_backend_internal:check_vhost_access_in_khepri(
+      Username, VHostName).
+
+set_permissions(mnesia, Username, VHostName, UserPermission) ->
+    rabbit_auth_backend_internal:set_permissions_in_mnesia(
+      Username, VHostName, UserPermission);
+set_permissions(khepri, Username, VHostName, UserPermission) ->
+    rabbit_auth_backend_internal:set_permissions_in_khepri(
+      Username, VHostName, UserPermission).
