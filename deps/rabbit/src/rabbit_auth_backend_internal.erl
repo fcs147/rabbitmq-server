@@ -58,13 +58,28 @@
          lookup_user_in_khepri/1,
          add_user_sans_validation_in_mnesia/2,
          add_user_sans_validation_in_khepri/2,
+         update_user_in_mnesia/2,
+         update_user_in_khepri/2,
          delete_user_in_mnesia/1,
          delete_user_in_khepri/1,
 
          check_vhost_access_in_mnesia/2,
          check_vhost_access_in_khepri/2,
+         check_resource_access_in_mnesia/4,
+         check_resource_access_in_khepri/4,
          set_permissions_in_mnesia/3,
-         set_permissions_in_khepri/3]).
+         set_permissions_in_khepri/3,
+         clear_permissions_in_mnesia/2,
+         clear_permissions_in_khepri/2,
+
+         check_topic_access_in_mnesia/5,
+         check_topic_access_in_khepri/5,
+         set_topic_permissions_in_mnesia/4,
+         set_topic_permissions_in_khepri/4,
+         clear_topic_permissions_in_mnesia/2,
+         clear_topic_permissions_in_mnesia/3,
+         clear_topic_permissions_in_khepri/2,
+         clear_topic_permissions_in_khepri/3]).
 -endif.
 
 -import(rabbit_data_coercion, [to_atom/1, to_list/1, to_binary/1]).
@@ -712,6 +727,8 @@ update_user_in_khepri(Username, Fun) ->
                 {error, _} = Error ->
                     throw(Error)
             end;
+        {error, {node_not_found, _}} ->
+            throw({error, {no_such_user, Username}});
         {error, _} = Error ->
             throw(Error)
     end.
@@ -810,11 +827,10 @@ set_topic_permissions_in_khepri(
     case rabbit_khepri:put(Path, TopicPermission, Extra) of
         {ok, _} ->
             ok;
-        {error, {node_not_found, #{node_path := Path1}}} ->
-            case is_path_to(Path1) of
-                {user, _} -> throw({error, {no_such_user, Username}});
-                _         -> throw({error, {no_such_vhost, VirtualHost}})
-            end;
+        {error, {node_not_found, _}} ->
+            throw({error, {no_such_user, Username}});
+        {error, {keep_until_conditions_not_met, _}} ->
+            throw({error, {no_such_vhost, VirtualHost}});
         Error ->
             throw(Error)
     end.
