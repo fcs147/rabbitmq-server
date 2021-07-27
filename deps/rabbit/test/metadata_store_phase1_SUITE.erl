@@ -901,24 +901,33 @@ delete_user_and_check_topic_access(_) ->
 
     Tests =
     [
-     ?with(?assertEqual(VHost,
-                        add_vhost(With, VHostName, VHostDesc, VHostTags))),
-     ?with(?assertEqual(ok, add_user(With, Username, User))),
-     ?with(?assertEqual(ok,
-                        set_topic_permissions(
-                          With, Username, VHostName, Exchange,
-                          TopicPermission))),
-     ?with(?assert(check_topic_access(
-                     With, Username, VHostName, Exchange, read, Context))),
-     ?with(?assertNot(check_topic_access(
-                        With, Username, VHostName, Exchange, read,
-                        Context#{routing_key => <<"something-else">>}))),
-     ?with(?assertEqual(ok, delete_user(With, Username))),
-     ?with(?assert(check_topic_access(
-                     With, Username, VHostName, Exchange, read, Context))),
-     ?with(?assert(check_topic_access(
-                     With, Username, VHostName, Exchange, read,
-                     Context#{routing_key => <<"something-else">>})))
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              ok,
+              set_topic_permissions(
+                With, Username, VHostName, Exchange, TopicPermission))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertNot(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read,
+                Context#{routing_key => <<"something-else">>}))),
+     ?with(?assertEqual(
+              ok,
+              delete_user(With, Username))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read,
+                Context#{routing_key => <<"something-else">>})))
     ],
 
     ?assertEqual(
