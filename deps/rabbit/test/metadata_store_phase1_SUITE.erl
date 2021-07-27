@@ -202,8 +202,12 @@ write_non_existing_user(_) ->
 
     Tests =
     [
-     ?with(?assertEqual(ok, add_user(With, Username, User))),
-     ?with(?assertEqual({ok, User}, lookup_user(With, Username)))
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              {ok, User},
+              lookup_user(With, Username)))
     ],
 
     ?assertEqual(
@@ -219,10 +223,15 @@ write_existing_user(_) ->
 
     Tests =
     [
-     ?with(?assertEqual(ok, add_user(With, Username, User))),
-     ?with(?assertThrow({error, {user_already_exists, Username}},
-                        add_user(With, Username, User))),
-     ?with(?assertEqual({ok, User}, lookup_user(With, Username)))
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertThrow(
+              {error, {user_already_exists, Username}},
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              {ok, User},
+              lookup_user(With, Username)))
     ],
 
     ?assertEqual(
@@ -241,10 +250,15 @@ update_non_existing_user(_) ->
 
     Tests =
     [
-     ?with(?assertEqual({error, not_found}, lookup_user(With, Username))),
-     ?with(?assertThrow({error, {no_such_user, Username}},
-                        update_user(With, Username, Fun))),
-     ?with(?assertEqual({error, not_found}, lookup_user(With, Username)))
+     ?with(?assertEqual(
+              {error, not_found},
+              lookup_user(With, Username))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              update_user(With, Username, Fun))),
+     ?with(?assertEqual(
+              {error, not_found},
+              lookup_user(With, Username)))
     ],
 
     ?assertEqual(
@@ -263,10 +277,18 @@ update_existing_user(_) ->
 
     Tests =
     [
-     ?with(?assertEqual(ok, add_user(With, Username, User))),
-     ?with(?assertEqual({ok, User}, lookup_user(With, Username))),
-     ?with(?assertEqual(ok, update_user(With, Username, Fun))),
-     ?with(?assertEqual({ok, UpdatedUser}, lookup_user(With, Username)))
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              {ok, User},
+              lookup_user(With, Username))),
+     ?with(?assertEqual(
+              ok,
+              update_user(With, Username, Fun))),
+     ?with(?assertEqual(
+              {ok, UpdatedUser},
+              lookup_user(With, Username)))
     ],
 
     ?assertEqual(
@@ -281,10 +303,15 @@ delete_non_existing_user(_) ->
 
     Tests =
     [
-     ?with(?assertEqual({error, not_found}, lookup_user(With, Username))),
-     ?with(?assertThrow({error, {no_such_user, Username}},
-                        delete_user(With, Username))),
-     ?with(?assertEqual({error, not_found}, lookup_user(With, Username)))
+     ?with(?assertEqual(
+              {error, not_found},
+              lookup_user(With, Username))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              delete_user(With, Username))),
+     ?with(?assertEqual(
+              {error, not_found},
+              lookup_user(With, Username)))
     ],
 
     ?assertEqual(
@@ -300,10 +327,18 @@ delete_existing_user(_) ->
 
     Tests =
     [
-     ?with(?assertEqual(ok, add_user(With, Username, User))),
-     ?with(?assertEqual({ok, User}, lookup_user(With, Username))),
-     ?with(?assertEqual(ok, delete_user(With, Username))),
-     ?with(?assertEqual({error, not_found}, lookup_user(With, Username)))
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              {ok, User},
+              lookup_user(With, Username))),
+     ?with(?assertEqual(
+              ok,
+              delete_user(With, Username))),
+     ?with(?assertEqual(
+              {error, not_found},
+              lookup_user(With, Username)))
     ],
 
     ?assertEqual(
@@ -332,12 +367,16 @@ write_user_permission_for_non_existing_vhost(_) ->
 
     Tests =
     [
-     ?with(?assertEqual(ok, add_user(With, Username, User))),
-     ?with(?assertNot(check_vhost_access(With, Username, VHostName))),
-     ?with(?assertThrow({error, {no_such_vhost, VHostName}},
-                        set_permissions(
-                          With, Username, VHostName, UserPermission))),
-     ?with(?assertNot(check_vhost_access(With, Username, VHostName)))
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertNot(
+              check_vhost_access(With, Username, VHostName))),
+     ?with(?assertThrow(
+              {error, {no_such_vhost, VHostName}},
+              set_permissions(With, Username, VHostName, UserPermission))),
+     ?with(?assertNot(
+              check_vhost_access(With, Username, VHostName)))
     ],
 
     ?assertEqual(
@@ -364,13 +403,16 @@ write_user_permission_for_non_existing_user(_) ->
 
     Tests =
     [
-     ?with(?assertEqual(VHost,
-                        add_vhost(With, VHostName, VHostDesc, VHostTags))),
-     ?with(?assertNot(check_vhost_access(With, Username, VHostName))),
-     ?with(?assertThrow({error, {no_such_user, Username}},
-                        set_permissions(
-                          With, Username, VHostName, UserPermission))),
-     ?with(?assertNot(check_vhost_access(With, Username, VHostName)))
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertNot(
+              check_vhost_access(With, Username, VHostName))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              set_permissions(With, Username, VHostName, UserPermission))),
+     ?with(?assertNot(
+              check_vhost_access(With, Username, VHostName)))
     ],
 
     ?assertEqual(
@@ -398,15 +440,21 @@ write_user_permission_for_existing_user(_) ->
 
     Tests =
     [
-     ?with(?assertNot(check_vhost_access(With, Username, VHostName))),
-     ?with(?assertEqual(VHost,
-                        add_vhost(With, VHostName, VHostDesc, VHostTags))),
-     ?with(?assertEqual(ok, add_user(With, Username, User))),
-     ?with(?assertNot(check_vhost_access(With, Username, VHostName))),
-     ?with(?assertEqual(ok,
-                        set_permissions(
-                          With, Username, VHostName, UserPermission))),
-     ?with(?assert(check_vhost_access(With, Username, VHostName)))
+     ?with(?assertNot(
+              check_vhost_access(With, Username, VHostName))),
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertNot(
+              check_vhost_access(With, Username, VHostName))),
+     ?with(?assertEqual(
+              ok,
+              set_permissions(With, Username, VHostName, UserPermission))),
+     ?with(?assert(
+              check_vhost_access(With, Username, VHostName)))
     ],
 
     ?assertEqual(
@@ -432,53 +480,34 @@ check_resource_access(_) ->
                                         write      = <<>>,
                                         read       = <<>>}},
 
-    %% Checking resource access using Mnesia works.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_permissions_in_mnesia(
-         Username, VHostName, UserPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_resource_access_in_mnesia(
-         Username, VHostName, "my-resource", configure)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_resource_access_in_mnesia(
-         Username, VHostName, "my-resource", write)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_resource_access_in_mnesia(
-         Username, VHostName, "other-resource", configure)),
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              ok,
+              set_permissions(With, Username, VHostName, UserPermission))),
+     ?with(?assert(
+              check_resource_access(
+                With, Username, VHostName, "my-resource", configure))),
+     ?with(?assertNot(
+              check_resource_access(
+                With, Username, VHostName, "my-resource", write))),
+     ?with(?assertNot(
+              check_resource_access(
+                With, Username, VHostName, "other-resource", configure)))
+    ],
 
-    %% Checking resource access using Khepri works.
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_permissions_in_khepri(
-         Username, VHostName, UserPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_resource_access_in_khepri(
-         Username, VHostName, "my-resource", configure)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_resource_access_in_khepri(
-         Username, VHostName, "my-resource", write)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_resource_access_in_khepri(
-         Username, VHostName, "other-resource", configure)),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 clear_user_permission(_) ->
     VHostName = <<"vhost">>,
@@ -496,55 +525,34 @@ clear_user_permission(_) ->
                                         write      = <<>>,
                                         read       = <<>>}},
 
-    %% Checking resource access using Mnesia works.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_permissions_in_mnesia(
-         Username, VHostName, UserPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_resource_access_in_mnesia(
-         Username, VHostName, "my-resource", configure)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:clear_permissions_in_mnesia(
-         Username, VHostName)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_resource_access_in_mnesia(
-         Username, VHostName, "my-resource", configure)),
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              ok,
+              set_permissions(With, Username, VHostName, UserPermission))),
+     ?with(?assert(
+              check_resource_access(
+                With, Username, VHostName, "my-resource", configure))),
+     ?with(?assertEqual(
+              ok,
+              clear_permissions(With, Username, VHostName))),
+     ?with(?assertNot(
+              check_resource_access(
+                With, Username, VHostName, "my-resource", configure)))
+    ],
 
-    %% Checking resource access using Khepri works.
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_permissions_in_khepri(
-         Username, VHostName, UserPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_resource_access_in_khepri(
-         Username, VHostName, "my-resource", configure)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:clear_permissions_in_khepri(
-         Username, VHostName)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_resource_access_in_khepri(
-         Username, VHostName, "my-resource", configure)),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 delete_user_and_check_resource_access(_) ->
     VHostName = <<"vhost">>,
@@ -562,65 +570,38 @@ delete_user_and_check_resource_access(_) ->
                                         write      = <<>>,
                                         read       = <<>>}},
 
-    %% Checking resource access using Mnesia works.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_permissions_in_mnesia(
-         Username, VHostName, UserPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
-         Username, VHostName)),
-    ?assert(
-       rabbit_auth_backend_internal:check_resource_access_in_mnesia(
-         Username, VHostName, "my-resource", configure)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:delete_user_in_mnesia(Username)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
-         Username, VHostName)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_resource_access_in_mnesia(
-         Username, VHostName, "my-resource", configure)),
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              ok,
+              set_permissions(With, Username, VHostName, UserPermission))),
+     ?with(?assert(
+              check_vhost_access(With, Username, VHostName))),
+     ?with(?assert(
+              check_resource_access(
+                With, Username, VHostName, "my-resource", configure))),
+     ?with(?assertEqual(
+              ok,
+              delete_user(With, Username))),
+     ?with(?assertNot(
+              check_vhost_access(With, Username, VHostName))),
+     ?with(?assertNot(
+              check_resource_access(
+                With, Username, VHostName, "my-resource", configure)))
+    ],
 
-    %% Checking resource access using Khepri works.
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_permissions_in_khepri(
-         Username, VHostName, UserPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_vhost_access_in_khepri(
-         Username, VHostName)),
-    ?assert(
-       rabbit_auth_backend_internal:check_resource_access_in_khepri(
-         Username, VHostName, "my-resource", configure)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:delete_user_in_khepri(Username)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_vhost_access_in_khepri(
-         Username, VHostName)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_resource_access_in_khepri(
-         Username, VHostName, "my-resource", configure)),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 %%
 %% Topic permissions
@@ -646,43 +627,30 @@ write_topic_permission_for_non_existing_vhost(_) ->
                 variable_map => #{<<"vhost">> => VHostName,
                                   <<"username">> => Username}},
 
-    %% Mnesia.
     %% Unset permissions equals to permissions granted.
-    mock_disabled_feature_flag(),
+    Tests =
+    [
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertThrow(
+              {error, {no_such_vhost, VHostName}},
+              set_topic_permissions(
+                With, Username, VHostName, Exchange, TopicPermission))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context)))
+    ],
+
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertThrow(
-       {error, {no_such_vhost, VHostName}},
-       rabbit_auth_backend_internal:set_topic_permissions_in_mnesia(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-
-    %% Khepri.
-    %% Unset permissions equals to permissions granted.
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertThrow(
-       {error, {no_such_vhost, VHostName}},
-       rabbit_auth_backend_internal:set_topic_permissions_in_khepri(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 write_topic_permission_for_non_existing_user(_) ->
     VHostName = <<"vhost">>,
@@ -706,39 +674,29 @@ write_topic_permission_for_non_existing_user(_) ->
                 variable_map => #{<<"vhost">> => VHostName,
                                   <<"username">> => Username}},
 
-    %% Mnesia.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertThrow(
-       {error, {no_such_user, Username}},
-       rabbit_auth_backend_internal:set_topic_permissions_in_mnesia(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              set_topic_permissions(
+                With, Username, VHostName, Exchange, TopicPermission))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context)))
+    ],
 
-    %% Khepri.
-    mock_enabled_feature_flag(),
     ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertThrow(
-       {error, {no_such_user, Username}},
-       rabbit_auth_backend_internal:set_topic_permissions_in_khepri(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-
-    ok.
+       ok,
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 write_topic_permission_for_existing_user(_) ->
     VHostName = <<"vhost">>,
@@ -763,55 +721,36 @@ write_topic_permission_for_existing_user(_) ->
                 variable_map => #{<<"vhost">> => VHostName,
                                   <<"username">> => Username}},
 
-    %% Mnesia.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_topic_permissions_in_mnesia(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertEqual(
+              ok,
+              set_topic_permissions(
+                With, Username, VHostName, Exchange, TopicPermission))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertNot(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read,
+                Context#{routing_key => <<"something-else">>})))
+    ],
 
-    %% Khepri.
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_topic_permissions_in_khepri(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 clear_specific_topic_permission(_) ->
     VHostName = <<"vhost">>,
@@ -836,73 +775,45 @@ clear_specific_topic_permission(_) ->
                 variable_map => #{<<"vhost">> => VHostName,
                                   <<"username">> => Username}},
 
-    %% Mnesia.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_topic_permissions_in_mnesia(
-         Username, VHostName, Exchange, TopicPermission)),
     %% TODO: Add another topic permission to verify it's still present after
-    %% clear_topic_permission().
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:clear_topic_permissions_in_mnesia(
-         Username, VHostName, Exchange)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
+    %% clear_topic_permissions().
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              ok,
+              set_topic_permissions(
+                With, Username, VHostName, Exchange, TopicPermission))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertNot(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read,
+                Context#{routing_key => <<"something-else">>}))),
+     ?with(?assertEqual(
+              ok,
+              clear_topic_permissions(With, Username, VHostName, Exchange))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read,
+                Context#{routing_key => <<"something-else">>})))
+    ],
 
-    %% Khepri.
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_topic_permissions_in_khepri(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:clear_topic_permissions_in_khepri(
-         Username, VHostName, Exchange)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 clear_all_topic_permissions(_) ->
     VHostName = <<"vhost">>,
@@ -927,71 +838,43 @@ clear_all_topic_permissions(_) ->
                 variable_map => #{<<"vhost">> => VHostName,
                                   <<"username">> => Username}},
 
-    %% Mnesia.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_topic_permissions_in_mnesia(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:clear_topic_permissions_in_mnesia(
-         Username, VHostName)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              ok,
+              add_user(With, Username, User))),
+     ?with(?assertEqual(
+              ok,
+              set_topic_permissions(
+                With, Username, VHostName, Exchange, TopicPermission))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertNot(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read,
+                Context#{routing_key => <<"something-else">>}))),
+     ?with(?assertEqual(
+              ok,
+              clear_topic_permissions(With, Username, VHostName))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assert(
+              check_topic_access(
+                With, Username, VHostName, Exchange, read,
+                Context#{routing_key => <<"something-else">>})))
+    ],
 
-    %% Khepri.
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_topic_permissions_in_khepri(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:clear_topic_permissions_in_khepri(
-         Username, VHostName)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 delete_user_and_check_topic_access(_) ->
     VHostName = <<"vhost">>,
@@ -1016,69 +899,34 @@ delete_user_and_check_topic_access(_) ->
                 variable_map => #{<<"vhost">> => VHostName,
                                   <<"username">> => Username}},
 
-    %% Mnesia.
-    mock_disabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_mnesia(VHostName, VHostDesc, VHostTags)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_mnesia(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_topic_permissions_in_mnesia(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:delete_user_in_mnesia(Username)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read, Context)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_mnesia(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
+    Tests =
+    [
+     ?with(?assertEqual(VHost,
+                        add_vhost(With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(ok, add_user(With, Username, User))),
+     ?with(?assertEqual(ok,
+                        set_topic_permissions(
+                          With, Username, VHostName, Exchange,
+                          TopicPermission))),
+     ?with(?assert(check_topic_access(
+                     With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertNot(check_topic_access(
+                        With, Username, VHostName, Exchange, read,
+                        Context#{routing_key => <<"something-else">>}))),
+     ?with(?assertEqual(ok, delete_user(With, Username))),
+     ?with(?assert(check_topic_access(
+                     With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assert(check_topic_access(
+                     With, Username, VHostName, Exchange, read,
+                     Context#{routing_key => <<"something-else">>})))
+    ],
 
-    %% Khepri.
-    mock_enabled_feature_flag(),
-    ?assertEqual(
-       VHost,
-       rabbit_vhost:do_add_to_khepri(VHostName, VHostDesc, VHostTags)),
     ?assertEqual(
        ok,
-       rabbit_auth_backend_internal:add_user_sans_validation_in_khepri(
-         Username, User)),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:set_topic_permissions_in_khepri(
-         Username, VHostName, Exchange, TopicPermission)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assertNot(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-    ?assertEqual(
-       ok,
-       rabbit_auth_backend_internal:delete_user_in_khepri(Username)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read, Context)),
-    ?assert(
-       rabbit_auth_backend_internal:check_topic_access_in_khepri(
-         Username, VHostName, Exchange, read,
-         Context#{routing_key => <<"something-else">>})),
-
-    ok.
+       eunit:test(
+         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
+          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [verbose])).
 
 %% -------------------------------------------------------------------
 %% Helpers.
@@ -1117,6 +965,13 @@ delete_user(mnesia, Username) ->
 delete_user(khepri, Username) ->
     rabbit_auth_backend_internal:delete_user_in_khepri(Username).
 
+set_permissions(mnesia, Username, VHostName, UserPermission) ->
+    rabbit_auth_backend_internal:set_permissions_in_mnesia(
+      Username, VHostName, UserPermission);
+set_permissions(khepri, Username, VHostName, UserPermission) ->
+    rabbit_auth_backend_internal:set_permissions_in_khepri(
+      Username, VHostName, UserPermission).
+
 check_vhost_access(mnesia, Username, VHostName) ->
     rabbit_auth_backend_internal:check_vhost_access_in_mnesia(
       Username, VHostName);
@@ -1124,9 +979,44 @@ check_vhost_access(khepri, Username, VHostName) ->
     rabbit_auth_backend_internal:check_vhost_access_in_khepri(
       Username, VHostName).
 
-set_permissions(mnesia, Username, VHostName, UserPermission) ->
-    rabbit_auth_backend_internal:set_permissions_in_mnesia(
-      Username, VHostName, UserPermission);
-set_permissions(khepri, Username, VHostName, UserPermission) ->
-    rabbit_auth_backend_internal:set_permissions_in_khepri(
-      Username, VHostName, UserPermission).
+set_topic_permissions(mnesia, Username, VHostName, Exchange, TopicPermission) ->
+    rabbit_auth_backend_internal:set_topic_permissions_in_mnesia(
+      Username, VHostName, Exchange, TopicPermission);
+set_topic_permissions(khepri, Username, VHostName, Exchange, TopicPermission) ->
+    rabbit_auth_backend_internal:set_topic_permissions_in_khepri(
+      Username, VHostName, Exchange, TopicPermission).
+
+check_topic_access(mnesia, Username, VHostName, Exchange, Perm, Context) ->
+    rabbit_auth_backend_internal:check_topic_access_in_mnesia(
+      Username, VHostName, Exchange, Perm, Context);
+check_topic_access(khepri, Username, VHostName, Exchange, Perm, Context) ->
+    rabbit_auth_backend_internal:check_topic_access_in_khepri(
+      Username, VHostName, Exchange, Perm, Context).
+
+clear_permissions(mnesia, Username, VHostName) ->
+    rabbit_auth_backend_internal:clear_permissions_in_mnesia(
+      Username, VHostName);
+clear_permissions(khepri, Username, VHostName) ->
+    rabbit_auth_backend_internal:clear_permissions_in_khepri(
+      Username, VHostName).
+
+check_resource_access(mnesia, Username, VHostName, Resource, Perm) ->
+    rabbit_auth_backend_internal:check_resource_access_in_mnesia(
+      Username, VHostName, Resource, Perm);
+check_resource_access(khepri, Username, VHostName, Resource, Perm) ->
+    rabbit_auth_backend_internal:check_resource_access_in_khepri(
+      Username, VHostName, Resource, Perm).
+
+clear_topic_permissions(mnesia, Username, VHostName) ->
+    rabbit_auth_backend_internal:clear_topic_permissions_in_mnesia(
+      Username, VHostName);
+clear_topic_permissions(khepri, Username, VHostName) ->
+    rabbit_auth_backend_internal:clear_topic_permissions_in_khepri(
+      Username, VHostName).
+
+clear_topic_permissions(mnesia, Username, VHostName, Exchange) ->
+    rabbit_auth_backend_internal:clear_topic_permissions_in_mnesia(
+      Username, VHostName, Exchange);
+clear_topic_permissions(khepri, Username, VHostName, Exchange) ->
+    rabbit_auth_backend_internal:clear_topic_permissions_in_khepri(
+      Username, VHostName, Exchange).
