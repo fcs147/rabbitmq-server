@@ -32,7 +32,22 @@
 
 -ifdef(TEST).
 -export([do_add_to_mnesia/3,
-         do_add_to_khepri/3]).
+         do_add_to_khepri/3,
+         lookup_in_mnesia/1,
+         lookup_in_khepri/1,
+         exists_in_mnesia/1,
+         exists_in_khepri/1,
+         list_names_in_mnesia/0,
+         list_names_in_khepri/0,
+         all_in_mnesia/0,
+         all_in_khepri/0,
+         update_in_mnesia/2,
+         update_in_khepri/2,
+         info_in_mnesia/1,
+         info_in_khepri/1,
+         internal_delete_in_mnesia_part1/2,
+         internal_delete_in_mnesia_part2/1,
+         internal_delete_in_khepri/1]).
 -endif.
 
 %%
@@ -481,7 +496,7 @@ all_in_mnesia() ->
     mnesia:dirty_match_object(rabbit_vhost, vhost:pattern_match_all()).
 
 all_in_khepri() ->
-    Path = khepri_vhosts_path() ++ [vhost:pattern_match_all()],
+    Path = khepri_vhosts_path(),
     case rabbit_khepri:list_child_data(Path) of
         {ok, VHosts} -> maps:values(VHosts);
         _            -> []
@@ -587,8 +602,10 @@ update_in_khepri(VHostName, Fun) ->
                 Error ->
                     throw(Error)
             end;
-        _ ->
-            mnesia:abort({no_such_vhost, VHostName})
+        {error, {node_not_found, _}} ->
+            throw({error, {no_such_vhost, VHostName}});
+        Error ->
+            throw(Error)
     end.
 
 -spec update_metadata(vhost:name(), fun((map())-> map())) -> vhost:vhost() | rabbit_types:ok_or_error(any()).
@@ -703,7 +720,7 @@ info_in_mnesia(Key) ->
 
 info_in_khepri(Key) ->
     Path = khepri_vhost_path(Key),
-    case rabbit_khepri:get(Path) of
+    case rabbit_khepri:get_data(Path) of
         {ok, VHost} -> infos(?INFO_KEYS, VHost);
         _           -> []
     end.

@@ -62,6 +62,8 @@
          update_user_in_khepri/2,
          delete_user_in_mnesia/1,
          delete_user_in_khepri/1,
+         all_users_in_mnesia/0,
+         all_users_in_khepri/0,
 
          check_vhost_access_in_mnesia/2,
          check_vhost_access_in_khepri/2,
@@ -69,6 +71,9 @@
          check_resource_access_in_khepri/4,
          set_permissions_in_mnesia/3,
          set_permissions_in_khepri/3,
+         list_permissions_in_mnesia/1,
+         list_permissions_in_khepri/1,
+         match_user_vhost/2,
          clear_permissions_in_mnesia/2,
          clear_permissions_in_khepri/2,
 
@@ -76,6 +81,9 @@
          check_topic_access_in_khepri/5,
          set_topic_permissions_in_mnesia/4,
          set_topic_permissions_in_khepri/4,
+         list_topic_permissions_in_mnesia/1,
+         list_topic_permissions_in_khepri/1,
+         match_user_vhost_topic_permission/3,
          clear_topic_permissions_in_mnesia/2,
          clear_topic_permissions_in_mnesia/3,
          clear_topic_permissions_in_khepri/2,
@@ -1260,6 +1268,9 @@ list_user_permissions(Username, Ref, AggregatorPid) ->
         (rabbit_types:vhost()) -> [rabbit_types:infos()].
 
 list_vhost_permissions(VHostPath) ->
+    %% FIXME: Throw an exception if Khepri is used and the vhost doesn't
+    %% exist. Do that for all functions in the "list_vhost*" family. Likewise
+    %% for the "list_user*" family.
     QueryThunk = rabbit_vhost:with(
                    VHostPath, match_user_vhost('_', VHostPath)),
     Path = khepri_user_permission_path(#if_name_matches{regex = any},
