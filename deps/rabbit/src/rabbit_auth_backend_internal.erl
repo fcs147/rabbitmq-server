@@ -1216,29 +1216,33 @@ list_users(Ref, AggregatorPid) ->
 
 list_permissions() ->
     QueryThunk = match_user_vhost('_', '_'),
-    Path = khepri_user_permission_path(#if_name_matches{regex = any},
-                                       #if_name_matches{regex = any}),
+    Path = khepri_user_permission_path(?STAR, ?STAR),
     list_permissions(perms_info_keys(), QueryThunk, Path).
 
-list_permissions(Keys, QueryThunk, Path) ->
+list_permissions(Keys, QueryThunk, PathOrThunk) ->
     UserPermissions = rabbit_khepri:try_mnesia_or_khepri(
                         fun() -> list_permissions_in_mnesia(QueryThunk) end,
-                        fun() -> list_permissions_in_khepri(Path) end),
+                        fun() -> list_permissions_in_khepri(PathOrThunk) end),
     [extract_user_permission_params(Keys, U) || U <- UserPermissions].
 
 list_permissions_in_mnesia(QueryThunk) ->
     rabbit_misc:execute_mnesia_transaction(QueryThunk).
 
-list_permissions_in_khepri(Path) ->
+list_permissions_in_khepri(Path) when is_list(Path) ->
     case rabbit_khepri:match_and_get_data(Path) of
+        {ok, UserPermissions} -> maps:values(UserPermissions);
+        _                     -> []
+    end;
+list_permissions_in_khepri(QueryThunk) ->
+    case QueryThunk() of
         {ok, UserPermissions} -> maps:values(UserPermissions);
         _                     -> []
     end.
 
-list_permissions(Keys, QueryThunk, Path, Ref, AggregatorPid) ->
+list_permissions(Keys, QueryThunk, PathOrThunk, Ref, AggregatorPid) ->
     Users = rabbit_khepri:try_mnesia_or_khepri(
               fun() -> list_permissions_in_mnesia(QueryThunk) end,
-              fun() -> list_permissions_in_khepri(Path) end),
+              fun() -> list_permissions_in_khepri(PathOrThunk) end),
     rabbit_control_misc:emitting_map(
       AggregatorPid, Ref, fun(U) -> extract_user_permission_params(Keys, U) end,
       Users).
@@ -1271,31 +1275,58 @@ list_vhost_permissions(VHostPath) ->
     %% FIXME: Throw an exception if Khepri is used and the vhost doesn't
     %% exist. Do that for all functions in the "list_vhost*" family. Likewise
     %% for the "list_user*" family.
-    QueryThunk = rabbit_vhost:with(
+    MnesiaThunk = rabbit_vhost:with(
                    VHostPath, match_user_vhost('_', VHostPath)),
-    Path = khepri_user_permission_path(#if_name_matches{regex = any},
-                                       VHostPath),
-    list_permissions(vhost_perms_info_keys(), QueryThunk, Path).
+    KhepriThunk = list_user_permissions_khepri_thunk(VHostPath),
+    list_permissions(vhost_perms_info_keys(), MnesiaThunk, KhepriThunk).
 
 -spec list_vhost_permissions
         (rabbit_types:vhost(), reference(), pid()) -> 'ok'.
 
 list_vhost_permissions(VHostPath, Ref, AggregatorPid) ->
-    QueryThunk = rabbit_vhost:with(
-                   VHostPath, match_user_vhost('_', VHostPath)),
-    Path = khepri_user_permission_path(#if_name_matches{regex = any},
-                                       VHostPath),
+    MnesiaThunk = rabbit_vhost:with(
+                    VHostPath, match_user_vhost('_', VHostPath)),
+    KhepriThunk = list_user_permissions_khepri_thunk(VHostPath),
     list_permissions(
-      vhost_perms_info_keys(), QueryThunk, Path, Ref, AggregatorPid).
+      vhost_perms_info_keys(), MnesiaThunk, KhepriThunk, Ref, AggregatorPid).
 
 -spec list_user_vhost_permissions
         (rabbit_types:username(), rabbit_types:vhost()) -> [rabbit_types:infos()].
 
 list_user_vhost_permissions(Username, VHostPath) ->
-    QueryThunk = rabbit_vhost:with_user_and_vhost(
-                   Username, VHostPath, match_user_vhost(Username, VHostPath)),
-    Path = khepri_user_permission_path(Username, VHostPath),
-    list_permissions(user_vhost_perms_info_keys(), QueryThunk, Path).
+    MnesiaThunk = rabbit_vhost:with_user_and_vhost(
+                    Username, VHostPath,
+                    match_user_vhost(Username, VHostPath)),
+    KhepriThunk = list_user_permissions_khepri_thunk(Username, VHostPath),
+    list_permissions(user_vhost_perms_info_keys(), MnesiaThunk, KhepriThunk).
+
+list_user_permissions_khepri_thunk(VHostName) ->
+    %% This is the equivalent of rabbit_vhost:with() but with atomicity in the
+    %% case of Khepri.
+    fun() ->
+            Qs = [{rabbit_vhost:khepri_vhost_path(VHostName), exists},
+                  khepri_user_permission_path(?STAR, VHostName)],
+            case rabbit_khepri:multi_query(Qs) of
+                [true, Ret] -> ct:pal("Ret -> ~p", [Ret]), Ret;
+                [false, _] -> throw({error, {no_such_vhost, VHostName}});
+                Error -> Error
+            end
+    end.
+
+list_user_permissions_khepri_thunk(Username, VHostName) ->
+    %% This is the equivalent of rabbit_vhost:with_user_and_vhost() but with
+    %% atomicity in the case of Khepri.
+    fun() ->
+            Qs = [{khepri_user_path(Username), exists},
+                  {rabbit_vhost:khepri_vhost_path(VHostName), exists},
+                  khepri_user_permission_path(Username, VHostName)],
+            case rabbit_khepri:multi_query(Qs) of
+                [true, true, Ret] -> Ret;
+                [false, _, _] -> throw({error, {no_such_user, Username}});
+                [_, false, _] -> throw({error, {no_such_vhost, VHostName}});
+                Error -> Error
+            end
+    end.
 
 extract_user_permission_params(Keys, #user_permission{
                                         user_vhost =

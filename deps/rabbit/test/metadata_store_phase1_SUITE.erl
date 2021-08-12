@@ -45,6 +45,7 @@
          write_user_permission_for_existing_user/1,
          check_resource_access/1,
          list_user_permissions_on_non_existing_vhost/1,
+         list_user_permissions_for_non_existing_user/1,
          list_user_permissions/1,
          clear_user_permission/1,
          delete_user_and_check_resource_access/1,
@@ -106,6 +107,7 @@ groups() ->
          write_user_permission_for_existing_user,
          check_resource_access,
          list_user_permissions_on_non_existing_vhost,
+         list_user_permissions_for_non_existing_user,
          list_user_permissions,
          clear_user_permission,
          delete_user_and_check_resource_access,
@@ -222,6 +224,8 @@ end_per_group(_, Config) ->
 init_per_testcase(Testcase, Config) ->
     rabbit_ct_helpers:testcase_started(Config, Testcase),
 
+    rabbit_khepri:clear_forced_metadata_store(),
+
     %% Create Mnesia tables.
     TableDefs = rabbit_table:pre_khepri_definitions(),
     lists:foreach(
@@ -231,6 +235,8 @@ init_per_testcase(Testcase, Config) ->
     Config.
 
 end_per_testcase(Testcase, Config) ->
+    rabbit_khepri:clear_forced_metadata_store(),
+
     %% Delete Mnesia tables to clear any data.
     TableDefs = rabbit_table:pre_khepri_definitions(),
     lists:foreach(
@@ -255,7 +261,11 @@ init_feature_flags(Config) ->
 %% Testcases.
 %% -------------------------------------------------------------------
 
--define(with(T), fun(With) -> T end).
+%% We use `_With' (with the leading underscore) on purpose: we don't know if
+%% the code in `T' will use it. That code can still use `_With' of course.
+%% This simply avoids compiler warnings.
+-define(with(T), fun(_With) -> T end).
+
 -define(vhost_path(V),
         [rabbit_vhost, V]).
 -define(user_path(U),
@@ -279,15 +289,15 @@ write_non_existing_vhost(_) ->
     [
      ?with(?assertEqual(
               {error, {no_such_vhost, VHostName}},
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               VHost,
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {khepri, [rabbit_vhost],
                #{?vhost_path(VHostName) => VHost}}]))
@@ -296,8 +306,8 @@ write_non_existing_vhost(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 write_existing_vhost(_) ->
@@ -310,21 +320,21 @@ write_existing_vhost(_) ->
     [
      ?with(?assertEqual(
               {error, {no_such_vhost, VHostName}},
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               VHost,
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               VHost,
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {khepri, [rabbit_vhost],
                #{?vhost_path(VHostName) => VHost}}]))
@@ -333,8 +343,8 @@ write_existing_vhost(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 check_vhost_exists(_) ->
@@ -347,13 +357,13 @@ check_vhost_exists(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assert(
-              vhost_exists(With, VHostName))),
+              vhost_exists(_With, VHostName))),
      ?with(?assertNot(
-              vhost_exists(With, <<"non-existing-vhost">>))),
+              vhost_exists(_With, <<"non-existing-vhost">>))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {khepri, [rabbit_vhost],
                #{?vhost_path(VHostName) => VHost}}]))
@@ -362,8 +372,8 @@ check_vhost_exists(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 get_existing_vhost_info(_) ->
@@ -376,19 +386,19 @@ get_existing_vhost_info(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               [{name, VHostName},
                {tracing,false},
                {cluster_state, [{node(), running}]}],
-              vhost_info(With, VHostName)))
+              vhost_info(_With, VHostName)))
     ],
 
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 list_vhost_names(_) ->
@@ -405,15 +415,15 @@ list_vhost_names(_) ->
     [
      ?with(?assertEqual(
               VHostA,
-              add_vhost(With, VHostNameA, VHostDescA, VHostTagsA))),
+              add_vhost(_With, VHostNameA, VHostDescA, VHostTagsA))),
      ?with(?assertEqual(
               VHostB,
-              add_vhost(With, VHostNameB, VHostDescB, VHostTagsB))),
+              add_vhost(_With, VHostNameB, VHostDescB, VHostTagsB))),
      ?with(?assertEqual(
               [VHostNameA, VHostNameB],
-              list_vhosts(With))),
+              list_vhosts(_With))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHostA, VHostB]},
               {khepri, [rabbit_vhost],
                #{?vhost_path(VHostNameA) => VHostA,
@@ -423,8 +433,8 @@ list_vhost_names(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 list_vhost_objects(_) ->
@@ -441,15 +451,15 @@ list_vhost_objects(_) ->
     [
      ?with(?assertEqual(
               VHostA,
-              add_vhost(With, VHostNameA, VHostDescA, VHostTagsA))),
+              add_vhost(_With, VHostNameA, VHostDescA, VHostTagsA))),
      ?with(?assertEqual(
               VHostB,
-              add_vhost(With, VHostNameB, VHostDescB, VHostTagsB))),
+              add_vhost(_With, VHostNameB, VHostDescB, VHostTagsB))),
      ?with(?assertEqual(
               [VHostA, VHostB],
-              list_vhost_records(With))),
+              list_vhost_records(_With))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHostA, VHostB]},
               {khepri, [rabbit_vhost],
                #{?vhost_path(VHostNameA) => VHostA,
@@ -459,8 +469,8 @@ list_vhost_objects(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 update_non_existing_vhost(_) ->
@@ -475,15 +485,15 @@ update_non_existing_vhost(_) ->
     [
      ?with(?assertEqual(
               {error, {no_such_vhost, VHostName}},
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(?assertThrow(
               {error, {no_such_vhost, VHostName}},
-              update_vhost(With, VHostName, Fun))),
+              update_vhost(_With, VHostName, Fun))),
      ?with(?assertEqual(
               {error, {no_such_vhost, VHostName}},
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, []},
               {khepri, [rabbit_vhost],
                #{}}]))
@@ -492,8 +502,8 @@ update_non_existing_vhost(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 update_existing_vhost(_) ->
@@ -509,18 +519,18 @@ update_existing_vhost(_) ->
     [
      ?with(?assertEqual(
               {error, {no_such_vhost, VHostName}},
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               UpdatedVHost,
-              update_vhost(With, VHostName, Fun))),
+              update_vhost(_With, VHostName, Fun))),
      ?with(?assertEqual(
               UpdatedVHost,
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [UpdatedVHost]},
               {khepri, [rabbit_vhost],
                #{?vhost_path(VHostName) => UpdatedVHost}}]))
@@ -529,8 +539,8 @@ update_existing_vhost(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 delete_non_existing_vhost(_) ->
@@ -540,15 +550,44 @@ delete_non_existing_vhost(_) ->
     [
      ?with(?assertEqual(
               {error, {no_such_vhost, VHostName}},
-              lookup_vhost(With, VHostName))),
-     ?with(?assert(
-              ok,
-              delete_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
+     ?with(case _With of
+               %% There is a difference of behavior in this case. In the case
+               %% of Mnesia, rabbit_vhost takes care of deleting user/topic
+               %% permissions associated with the about-to-be-removed vhost.
+               %% This will throw an exception if the vhost doesn't exist
+               %% because rabbit_auth_backend_internal uses
+               %% rabbit_vhost:with() to verify the vhost exists again.
+               %%
+               %% In the case of Khepri, that association is handled by a
+               %% keep_until condition. Therefore the existence of the vhost
+               %% is not checked.
+               %%
+               %% In practice, that's ok: rabbit_vhost:internal_delete() is
+               %% only used in rabbit_vhost:delete() and the latter already
+               %% verifies the existence of the vhost.
+               %%
+               %% We could even consider it's a bug in the case of Mnesia:
+               %% rabbit_vhost:internal_delete() should probably not fail if
+               %% the vhost doesn't exist.
+               mnesia ->
+                   %% The inner throw is emitted by
+                   %% rabbit_auth_backend_internal:list_vhost_permissions().
+                   %% This exception is thrown again in the delete_vhost()
+                   %% helper in this testsuite.
+                   ?assertThrow(
+                      {error, {throw, {error, {no_such_vhost, VHostName}}}},
+                      delete_vhost(_With, VHostName));
+               khepri ->
+                   ?assertEqual(
+                      ok,
+                      delete_vhost(_With, VHostName))
+           end),
      ?with(?assertEqual(
               {error, {no_such_vhost, VHostName}},
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, []},
               {khepri, [rabbit_vhost],
                #{}}]))
@@ -557,8 +596,8 @@ delete_non_existing_vhost(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 delete_existing_vhost(_) ->
@@ -571,18 +610,18 @@ delete_existing_vhost(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               VHost,
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(?assertEqual(
               ok,
-              delete_vhost(With, VHostName))),
+              delete_vhost(_With, VHostName))),
      ?with(?assertEqual(
               {error, {no_such_vhost, VHostName}},
-              lookup_vhost(With, VHostName))),
+              lookup_vhost(_With, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, []},
               {khepri, [rabbit_vhost],
                #{}}]))
@@ -591,8 +630,8 @@ delete_existing_vhost(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 %%
@@ -607,15 +646,15 @@ write_non_existing_user(_) ->
     [
      ?with(?assertEqual(
               {error, not_found},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               {ok, User},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_user, [User]},
               {khepri, [rabbit_auth_backend_internal],
                #{?user_path(Username) => User}}]))
@@ -624,8 +663,8 @@ write_non_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 write_existing_user(_) ->
@@ -636,21 +675,21 @@ write_existing_user(_) ->
     [
      ?with(?assertEqual(
               {error, not_found},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               {ok, User},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(?assertThrow(
               {error, {user_already_exists, Username}},
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               {ok, User},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_user, [User]},
               {khepri, [rabbit_auth_backend_internal],
                #{?user_path(Username) => User}}]))
@@ -659,8 +698,8 @@ write_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 list_users(_) ->
@@ -673,15 +712,15 @@ list_users(_) ->
     [
      ?with(?assertEqual(
               ok,
-              add_user(With, UsernameA, UserA))),
+              add_user(_With, UsernameA, UserA))),
      ?with(?assertEqual(
               ok,
-              add_user(With, UsernameB, UserB))),
+              add_user(_With, UsernameB, UserB))),
      ?with(?assertEqual(
               [UserA, UserB],
-              list_user_records(With))),
+              list_user_records(_With))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_user, [UserA, UserB]},
               {khepri, [rabbit_auth_backend_internal],
                #{?user_path(UsernameA) => UserA,
@@ -691,8 +730,8 @@ list_users(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 update_non_existing_user(_) ->
@@ -707,15 +746,15 @@ update_non_existing_user(_) ->
     [
      ?with(?assertEqual(
               {error, not_found},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(?assertThrow(
               {error, {no_such_user, Username}},
-              update_user(With, Username, Fun))),
+              update_user(_With, Username, Fun))),
      ?with(?assertEqual(
               {error, not_found},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_user, []},
               {khepri, [rabbit_auth_backend_internal],
                #{}}]))
@@ -724,8 +763,8 @@ update_non_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 update_existing_user(_) ->
@@ -740,18 +779,18 @@ update_existing_user(_) ->
     [
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               {ok, User},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(?assertEqual(
               ok,
-              update_user(With, Username, Fun))),
+              update_user(_With, Username, Fun))),
      ?with(?assertEqual(
               {ok, UpdatedUser},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_user, [UpdatedUser]},
               {khepri, [rabbit_auth_backend_internal],
                #{?user_path(Username) => UpdatedUser}}]))
@@ -760,8 +799,8 @@ update_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 delete_non_existing_user(_) ->
@@ -771,15 +810,15 @@ delete_non_existing_user(_) ->
     [
      ?with(?assertEqual(
               {error, not_found},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(?assertThrow(
               {error, {no_such_user, Username}},
-              delete_user(With, Username))),
+              delete_user(_With, Username))),
      ?with(?assertEqual(
               {error, not_found},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_user, []},
               {khepri, [rabbit_auth_backend_internal],
                #{}}]))
@@ -788,8 +827,8 @@ delete_non_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 delete_existing_user(_) ->
@@ -800,18 +839,18 @@ delete_existing_user(_) ->
     [
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               {ok, User},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(?assertEqual(
               ok,
-              delete_user(With, Username))),
+              delete_user(_With, Username))),
      ?with(?assertEqual(
               {error, not_found},
-              lookup_user(With, Username))),
+              lookup_user(_With, Username))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_user, []},
               {khepri, [rabbit_auth_backend_internal],
                #{}}]))
@@ -820,8 +859,8 @@ delete_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 %%
@@ -845,16 +884,16 @@ write_user_permission_for_non_existing_vhost(_) ->
     [
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertNot(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(?assertThrow(
               {error, {no_such_vhost, VHostName}},
-              set_permissions(With, Username, VHostName, UserPermission))),
+              set_permissions(_With, Username, VHostName, UserPermission))),
      ?with(?assertNot(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, []},
               {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_user_permission, []},
@@ -867,8 +906,8 @@ write_user_permission_for_non_existing_vhost(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 write_user_permission_for_non_existing_user(_) ->
@@ -890,16 +929,16 @@ write_user_permission_for_non_existing_user(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertNot(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(?assertThrow(
               {error, {no_such_user, Username}},
-              set_permissions(With, Username, VHostName, UserPermission))),
+              set_permissions(_With, Username, VHostName, UserPermission))),
      ?with(?assertNot(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {mnesia, rabbit_user, []},
               {mnesia, rabbit_user_permission, []},
@@ -912,8 +951,8 @@ write_user_permission_for_non_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 write_user_permission_for_existing_user(_) ->
@@ -935,22 +974,22 @@ write_user_permission_for_existing_user(_) ->
     Tests =
     [
      ?with(?assertNot(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertNot(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(?assertEqual(
               ok,
-              set_permissions(With, Username, VHostName, UserPermission))),
+              set_permissions(_With, Username, VHostName, UserPermission))),
      ?with(?assert(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_user_permission, [UserPermission]},
@@ -964,8 +1003,8 @@ write_user_permission_for_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 check_resource_access(_) ->
@@ -988,68 +1027,100 @@ check_resource_access(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               ok,
-              set_permissions(With, Username, VHostName, UserPermission))),
+              set_permissions(_With, Username, VHostName, UserPermission))),
      ?with(?assert(
               check_resource_access(
-                With, Username, VHostName, "my-resource", configure))),
+                _With, Username, VHostName, "my-resource", configure))),
      ?with(?assertNot(
               check_resource_access(
-                With, Username, VHostName, "my-resource", write))),
+                _With, Username, VHostName, "my-resource", write))),
      ?with(?assertNot(
               check_resource_access(
-                With, Username, VHostName, "other-resource", configure)))
+                _With, Username, VHostName, "other-resource", configure)))
     ],
 
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 list_user_permissions_on_non_existing_vhost(_) ->
-    UsernameA = <<"alice">>,
-    UserA = internal_user:create_user(UsernameA, <<"password">>, undefined),
-    UsernameB = <<"bob">>,
-    UserB = internal_user:create_user(UsernameB, <<"password">>, undefined),
+    VHostName = <<"non-existing-vhost">>,
+    Username = <<"alice">>,
+    User = internal_user:create_user(Username, <<"password">>, undefined),
 
     Tests =
     [
      ?with(?assertEqual(
               ok,
-              add_user(With, UsernameA, UserA))),
-     ?with(?assertEqual(
-              ok,
-              add_user(With, UsernameB, UserB))),
-     ?with(?assertEqual(
-              [],
-              list_permissions(
-                With,
-                rabbit_auth_backend_internal:match_user_vhost('_', '_'),
-                ?user_perm_path(?STAR, ?STAR)))),
+              add_user(_With, Username, User))),
+     ?with(?assertThrow(
+              {error, {no_such_vhost, VHostName}},
+              rabbit_auth_backend_internal:list_vhost_permissions(
+                VHostName))),
+     ?with(?assertThrow(
+              {error, {no_such_vhost, VHostName}},
+              rabbit_auth_backend_internal:list_user_vhost_permissions(
+                Username, VHostName))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, []},
-              {mnesia, rabbit_user, [UserA, UserB]},
+              {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_user_permission, []},
-              {khepri, [rabbit_vhost],
-               #{}},
+              {khepri, [rabbit_vhost], #{}},
               {khepri, [rabbit_auth_backend_internal],
-               #{?user_path(UsernameA) => UserA,
-                 ?user_path(UsernameB) => UserB}}]))
+               #{?user_path(Username) => User}}]))
     ],
 
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
+list_user_permissions_for_non_existing_user(_) ->
+    VHostName = <<"vhost">>,
+    VHostDesc = <<>>,
+    VHostTags = [],
+    VHost = vhost_v1:new(VHostName, VHostTags),
+    Username = <<"non-existing-user">>,
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              [],
+              rabbit_auth_backend_internal:list_vhost_permissions(
+                VHostName))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              rabbit_auth_backend_internal:list_user_vhost_permissions(
+                Username, VHostName))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, [VHost]},
+              {mnesia, rabbit_user, []},
+              {mnesia, rabbit_user_permission, []},
+              {khepri, [rabbit_vhost], #{?vhost_path(VHostName) => VHost}},
+              {khepri, [rabbit_auth_backend_internal], #{}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 list_user_permissions(_) ->
@@ -1095,33 +1166,36 @@ list_user_permissions(_) ->
     [
      ?with(?assertEqual(
               VHostA,
-              add_vhost(With, VHostNameA, VHostDescA, VHostTagsA))),
+              add_vhost(_With, VHostNameA, VHostDescA, VHostTagsA))),
      ?with(?assertEqual(
               VHostB,
-              add_vhost(With, VHostNameB, VHostDescB, VHostTagsB))),
+              add_vhost(_With, VHostNameB, VHostDescB, VHostTagsB))),
      ?with(?assertEqual(
               ok,
-              add_user(With, UsernameA, UserA))),
+              add_user(_With, UsernameA, UserA))),
      ?with(?assertEqual(
               ok,
-              set_permissions(With, UsernameA, VHostNameA, UserPermissionA1))),
+              set_permissions(
+                _With, UsernameA, VHostNameA, UserPermissionA1))),
      ?with(?assertEqual(
               ok,
-              set_permissions(With, UsernameA, VHostNameB, UserPermissionA2))),
+              set_permissions(
+                _With, UsernameA, VHostNameB, UserPermissionA2))),
      ?with(?assertEqual(
               ok,
-              add_user(With, UsernameB, UserB))),
+              add_user(_With, UsernameB, UserB))),
      ?with(?assertEqual(
               ok,
-              set_permissions(With, UsernameB, VHostNameA, UserPermissionB1))),
+              set_permissions(
+                _With, UsernameB, VHostNameA, UserPermissionB1))),
      ?with(?assertEqual(
               [UserPermissionA1, UserPermissionA2, UserPermissionB1],
               list_permissions(
-                With,
+                _With,
                 rabbit_auth_backend_internal:match_user_vhost('_', '_'),
                 ?user_perm_path(?STAR, ?STAR)))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHostA, VHostB]},
               {mnesia, rabbit_user, [UserA, UserB]},
               {mnesia, rabbit_user_permission, [UserPermissionA1,
@@ -1144,8 +1218,8 @@ list_user_permissions(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 clear_user_permission(_) ->
@@ -1168,24 +1242,24 @@ clear_user_permission(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               ok,
-              set_permissions(With, Username, VHostName, UserPermission))),
+              set_permissions(_With, Username, VHostName, UserPermission))),
      ?with(?assert(
               check_resource_access(
-                With, Username, VHostName, "my-resource", configure))),
+                _With, Username, VHostName, "my-resource", configure))),
      ?with(?assertEqual(
               ok,
-              clear_permissions(With, Username, VHostName))),
+              clear_permissions(_With, Username, VHostName))),
      ?with(?assertNot(
               check_resource_access(
-                With, Username, VHostName, "my-resource", configure))),
+                _With, Username, VHostName, "my-resource", configure))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_user_permission, []},
@@ -1198,8 +1272,8 @@ clear_user_permission(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 delete_user_and_check_resource_access(_) ->
@@ -1222,28 +1296,28 @@ delete_user_and_check_resource_access(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               ok,
-              set_permissions(With, Username, VHostName, UserPermission))),
+              set_permissions(_With, Username, VHostName, UserPermission))),
      ?with(?assert(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(?assert(
               check_resource_access(
-                With, Username, VHostName, "my-resource", configure))),
+                _With, Username, VHostName, "my-resource", configure))),
      ?with(?assertEqual(
               ok,
-              delete_user(With, Username))),
+              delete_user(_With, Username))),
      ?with(?assertNot(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(?assertNot(
               check_resource_access(
-                With, Username, VHostName, "my-resource", configure))),
+                _With, Username, VHostName, "my-resource", configure))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {mnesia, rabbit_user, []},
               {mnesia, rabbit_user_permission, []},
@@ -1256,8 +1330,8 @@ delete_user_and_check_resource_access(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 delete_vhost_and_check_resource_access(_) ->
@@ -1280,28 +1354,28 @@ delete_vhost_and_check_resource_access(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               ok,
-              set_permissions(With, Username, VHostName, UserPermission))),
+              set_permissions(_With, Username, VHostName, UserPermission))),
      ?with(?assert(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(?assert(
               check_resource_access(
-                With, Username, VHostName, "my-resource", configure))),
+                _With, Username, VHostName, "my-resource", configure))),
      ?with(?assertEqual(
               ok,
-              delete_vhost(With, VHostName))),
+              delete_vhost(_With, VHostName))),
      ?with(?assertNot(
-              check_vhost_access(With, Username, VHostName))),
+              check_vhost_access(_With, Username, VHostName))),
      ?with(?assertNot(
               check_resource_access(
-                With, Username, VHostName, "my-resource", configure))),
+                _With, Username, VHostName, "my-resource", configure))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, []},
               {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_user_permission, []},
@@ -1314,8 +1388,8 @@ delete_vhost_and_check_resource_access(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 %%
@@ -1347,19 +1421,19 @@ write_topic_permission_for_non_existing_vhost(_) ->
     [
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(?assertThrow(
               {error, {no_such_vhost, VHostName}},
               set_topic_permissions(
-                With, Username, VHostName, Exchange, TopicPermission))),
+                _With, Username, VHostName, Exchange, TopicPermission))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, []},
               {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_topic_permission, []},
@@ -1372,8 +1446,8 @@ write_topic_permission_for_non_existing_vhost(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 write_topic_permission_for_non_existing_user(_) ->
@@ -1402,19 +1476,19 @@ write_topic_permission_for_non_existing_user(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(?assertThrow(
               {error, {no_such_user, Username}},
               set_topic_permissions(
-                With, Username, VHostName, Exchange, TopicPermission))),
+                _With, Username, VHostName, Exchange, TopicPermission))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {mnesia, rabbit_user, []},
               {mnesia, rabbit_topic_permission, []},
@@ -1427,8 +1501,8 @@ write_topic_permission_for_non_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 write_topic_permission_for_existing_user(_) ->
@@ -1458,26 +1532,26 @@ write_topic_permission_for_existing_user(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(?assertEqual(
               ok,
               set_topic_permissions(
-                With, Username, VHostName, Exchange, TopicPermission))),
+                _With, Username, VHostName, Exchange, TopicPermission))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(?assertNot(
               check_topic_access(
-                With, Username, VHostName, Exchange, read,
+                _With, Username, VHostName, Exchange, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_topic_permission, [TopicPermission]},
@@ -1492,8 +1566,8 @@ write_topic_permission_for_existing_user(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 list_topic_permissions_on_non_existing_vhost(_) ->
@@ -1506,19 +1580,19 @@ list_topic_permissions_on_non_existing_vhost(_) ->
     [
      ?with(?assertEqual(
               ok,
-              add_user(With, UsernameA, UserA))),
+              add_user(_With, UsernameA, UserA))),
      ?with(?assertEqual(
               ok,
-              add_user(With, UsernameB, UserB))),
+              add_user(_With, UsernameB, UserB))),
      ?with(?assertEqual(
               [],
               list_topic_permissions(
-                With,
+                _With,
                 rabbit_auth_backend_internal:
                 match_user_vhost_topic_permission('_', '_', '_'),
                 ?topic_perm_path(?STAR, ?STAR, ?STAR)))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, []},
               {mnesia, rabbit_user, [UserA, UserB]},
               {mnesia, rabbit_topic_permission, []},
@@ -1532,8 +1606,8 @@ list_topic_permissions_on_non_existing_vhost(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 list_topic_permissions(_) ->
@@ -1590,37 +1664,37 @@ list_topic_permissions(_) ->
     [
      ?with(?assertEqual(
               VHostA,
-              add_vhost(With, VHostNameA, VHostDescA, VHostTagsA))),
+              add_vhost(_With, VHostNameA, VHostDescA, VHostTagsA))),
      ?with(?assertEqual(
               VHostB,
-              add_vhost(With, VHostNameB, VHostDescB, VHostTagsB))),
+              add_vhost(_With, VHostNameB, VHostDescB, VHostTagsB))),
      ?with(?assertEqual(
               ok,
-              add_user(With, UsernameA, UserA))),
-     ?with(?assertEqual(
-              ok,
-              set_topic_permissions(
-                With, UsernameA, VHostNameA, ExchangeA, TopicPermissionA1))),
+              add_user(_With, UsernameA, UserA))),
      ?with(?assertEqual(
               ok,
               set_topic_permissions(
-                With, UsernameA, VHostNameB, ExchangeB, TopicPermissionA2))),
-     ?with(?assertEqual(
-              ok,
-              add_user(With, UsernameB, UserB))),
+                _With, UsernameA, VHostNameA, ExchangeA, TopicPermissionA1))),
      ?with(?assertEqual(
               ok,
               set_topic_permissions(
-                With, UsernameB, VHostNameA, ExchangeA, TopicPermissionB1))),
+                _With, UsernameA, VHostNameB, ExchangeB, TopicPermissionA2))),
+     ?with(?assertEqual(
+              ok,
+              add_user(_With, UsernameB, UserB))),
+     ?with(?assertEqual(
+              ok,
+              set_topic_permissions(
+                _With, UsernameB, VHostNameA, ExchangeA, TopicPermissionB1))),
      ?with(?assertEqual(
               [TopicPermissionA1, TopicPermissionA2, TopicPermissionB1],
               list_topic_permissions(
-                With,
+                _With,
                 rabbit_auth_backend_internal:
                 match_user_vhost_topic_permission('_', '_', '_'),
                 ?topic_perm_path(?STAR, ?STAR, ?STAR)))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHostA, VHostB]},
               {mnesia, rabbit_user, [UserA, UserB]},
               {mnesia, rabbit_topic_permission, [TopicPermissionA1,
@@ -1643,8 +1717,8 @@ list_topic_permissions(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 clear_specific_topic_permission(_) ->
@@ -1686,51 +1760,51 @@ clear_specific_topic_permission(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
-     ?with(?assertEqual(
-              ok,
-              set_topic_permissions(
-                With, Username, VHostName, ExchangeA, TopicPermissionA))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               ok,
               set_topic_permissions(
-                With, Username, VHostName, ExchangeB, TopicPermissionB))),
+                _With, Username, VHostName, ExchangeA, TopicPermissionA))),
+     ?with(?assertEqual(
+              ok,
+              set_topic_permissions(
+                _With, Username, VHostName, ExchangeB, TopicPermissionB))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeA, read, Context))),
+                _With, Username, VHostName, ExchangeA, read, Context))),
      ?with(?assertNot(
               check_topic_access(
-                With, Username, VHostName, ExchangeA, read,
+                _With, Username, VHostName, ExchangeA, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeB, read, Context))),
+                _With, Username, VHostName, ExchangeB, read, Context))),
      ?with(?assertNot(
               check_topic_access(
-                With, Username, VHostName, ExchangeB, read,
+                _With, Username, VHostName, ExchangeB, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(?assertEqual(
               ok,
-              clear_topic_permissions(With, Username, VHostName, ExchangeA))),
+              clear_topic_permissions(_With, Username, VHostName, ExchangeA))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeA, read, Context))),
+                _With, Username, VHostName, ExchangeA, read, Context))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeA, read,
+                _With, Username, VHostName, ExchangeA, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeB, read, Context))),
+                _With, Username, VHostName, ExchangeB, read, Context))),
      ?with(?assertNot(
               check_topic_access(
-                With, Username, VHostName, ExchangeB, read,
+                _With, Username, VHostName, ExchangeB, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_topic_permission, [TopicPermissionB]},
@@ -1745,8 +1819,8 @@ clear_specific_topic_permission(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 clear_all_topic_permissions(_) ->
@@ -1788,51 +1862,51 @@ clear_all_topic_permissions(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
-     ?with(?assertEqual(
-              ok,
-              set_topic_permissions(
-                With, Username, VHostName, ExchangeA, TopicPermissionA))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               ok,
               set_topic_permissions(
-                With, Username, VHostName, ExchangeB, TopicPermissionB))),
+                _With, Username, VHostName, ExchangeA, TopicPermissionA))),
+     ?with(?assertEqual(
+              ok,
+              set_topic_permissions(
+                _With, Username, VHostName, ExchangeB, TopicPermissionB))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeA, read, Context))),
+                _With, Username, VHostName, ExchangeA, read, Context))),
      ?with(?assertNot(
               check_topic_access(
-                With, Username, VHostName, ExchangeA, read,
+                _With, Username, VHostName, ExchangeA, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeB, read, Context))),
+                _With, Username, VHostName, ExchangeB, read, Context))),
      ?with(?assertNot(
               check_topic_access(
-                With, Username, VHostName, ExchangeB, read,
+                _With, Username, VHostName, ExchangeB, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(?assertEqual(
               ok,
-              clear_topic_permissions(With, Username, VHostName))),
+              clear_topic_permissions(_With, Username, VHostName))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeA, read, Context))),
+                _With, Username, VHostName, ExchangeA, read, Context))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeA, read,
+                _With, Username, VHostName, ExchangeA, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeB, read, Context))),
+                _With, Username, VHostName, ExchangeB, read, Context))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, ExchangeB, read,
+                _With, Username, VHostName, ExchangeB, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_topic_permission, []},
@@ -1845,8 +1919,8 @@ clear_all_topic_permissions(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 delete_user_and_check_topic_access(_) ->
@@ -1876,33 +1950,33 @@ delete_user_and_check_topic_access(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               ok,
               set_topic_permissions(
-                With, Username, VHostName, Exchange, TopicPermission))),
+                _With, Username, VHostName, Exchange, TopicPermission))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(?assertNot(
               check_topic_access(
-                With, Username, VHostName, Exchange, read,
+                _With, Username, VHostName, Exchange, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(?assertEqual(
               ok,
-              delete_user(With, Username))),
+              delete_user(_With, Username))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read,
+                _With, Username, VHostName, Exchange, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, [VHost]},
               {mnesia, rabbit_user, []},
               {mnesia, rabbit_topic_permission, []},
@@ -1915,8 +1989,8 @@ delete_user_and_check_topic_access(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 delete_vhost_and_check_topic_access(_) ->
@@ -1946,33 +2020,33 @@ delete_vhost_and_check_topic_access(_) ->
     [
      ?with(?assertEqual(
               VHost,
-              add_vhost(With, VHostName, VHostDesc, VHostTags))),
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               ok,
-              add_user(With, Username, User))),
+              add_user(_With, Username, User))),
      ?with(?assertEqual(
               ok,
               set_topic_permissions(
-                With, Username, VHostName, Exchange, TopicPermission))),
+                _With, Username, VHostName, Exchange, TopicPermission))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(?assertNot(
               check_topic_access(
-                With, Username, VHostName, Exchange, read,
+                _With, Username, VHostName, Exchange, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(?assertEqual(
               ok,
-              delete_vhost(With, VHostName))),
+              delete_vhost(_With, VHostName))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read, Context))),
+                _With, Username, VHostName, Exchange, read, Context))),
      ?with(?assert(
               check_topic_access(
-                With, Username, VHostName, Exchange, read,
+                _With, Username, VHostName, Exchange, read,
                 Context#{routing_key => <<"something-else">>}))),
      ?with(check_storage(
-             With,
+             _With,
              [{mnesia, rabbit_vhost, []},
               {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_topic_permission, []},
@@ -1985,23 +2059,27 @@ delete_vhost_and_check_topic_access(_) ->
     ?assertEqual(
        ok,
        eunit:test(
-         [{setup, fun mock_disabled_feature_flag/0, [{with, mnesia, Tests}]},
-          {setup, fun mock_enabled_feature_flag/0,  [{with, khepri, Tests}]}],
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
 %% -------------------------------------------------------------------
 %% Helpers.
 %% -------------------------------------------------------------------
 
-mock_enabled_feature_flag() ->
-    ct:pal(?LOW_IMPORTANCE, "Using Khepri (enabling feature flag)", []),
-    mock_feature_flag_state(true).
-
-mock_disabled_feature_flag() ->
+force_mnesia_use() ->
     ct:pal(?LOW_IMPORTANCE, "Using Mnesia (disabling feature flag)", []),
+    rabbit_khepri:force_metadata_store(mnesia),
     mock_feature_flag_state(false).
 
+force_khepri_use() ->
+    ct:pal(?LOW_IMPORTANCE, "Using Khepri (enabling feature flag)", []),
+    rabbit_khepri:force_metadata_store(khepri),
+    mock_feature_flag_state(true).
+
 mock_feature_flag_state(State) ->
+    _ = (catch meck:unload(rabbit_khepri)),
+    meck:new(rabbit_khepri, [passthrough, no_link]),
     meck:expect(rabbit_khepri, is_enabled, fun(_) -> State end).
 
 add_vhost(mnesia, VHostName, VHostDesc, VHostTags) ->
@@ -2152,11 +2230,11 @@ clear_topic_permissions(khepri, Username, VHostName, Exchange) ->
     rabbit_auth_backend_internal:clear_topic_permissions_in_khepri(
       Username, VHostName, Exchange).
 
-check_storage(With, [{With, Source, Content} | Rest]) ->
-    check_storage(With, Source, Content),
-    check_storage(With, Rest);
-check_storage(With, [_ | Rest]) ->
-    check_storage(With, Rest);
+check_storage(_With, [{_With, Source, Content} | Rest]) ->
+    check_storage(_With, Source, Content),
+    check_storage(_With, Rest);
+check_storage(_With, [_ | Rest]) ->
+    check_storage(_With, Rest);
 check_storage(_, []) ->
     ok.
 

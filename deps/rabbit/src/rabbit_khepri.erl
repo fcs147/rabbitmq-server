@@ -8,6 +8,7 @@
 -module(rabbit_khepri).
 
 -include_lib("kernel/include/logger.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 -include_lib("khepri/include/khepri.hrl").
 -include_lib("rabbit_common/include/logging.hrl").
@@ -31,6 +32,7 @@
          match/1,
          match_and_get_data/1,
          exists/1,
+         multi_query/1,
          find/1,
          list/1,
          list_child_nodes/1,
@@ -49,6 +51,11 @@
          is_enabled/1,
          try_mnesia_or_khepri/2]).
 -export([priv_reset/0]).
+
+-ifdef(TEST).
+-export([force_metadata_store/1,
+         clear_forced_metadata_store/0]).
+-endif.
 
 -compile({no_auto_import, [get/1, get/2]}).
 
@@ -213,6 +220,10 @@ match_and_get_data(Path) ->
 
 exists(Path) -> khepri:exists(?STORE_ID, Path).
 find(Path) -> khepri:find(?STORE_ID, Path).
+
+multi_query(PathList) ->
+    khepri:multi_query(?STORE_ID, PathList).
+
 list(Path) -> khepri:list(?STORE_ID, Path).
 
 list_child_nodes(Path) ->
@@ -278,8 +289,22 @@ is_enabled(Blocking) ->
     rabbit_feature_flags:is_enabled(
       raft_based_metadata_store_phase1, Blocking) =:= true.
 
+-ifdef(TEST).
+-define(FORCED_MDS_KEY, {?MODULE, forced_metadata_store}).
+
+force_metadata_store(Backend) ->
+    persistent_term:put(?FORCED_MDS_KEY, Backend).
+
+get_forced_metadata_store() ->
+    persistent_term:get(?FORCED_MDS_KEY, undefined).
+
+clear_forced_metadata_store() ->
+    _ = persistent_term:erase(?FORCED_MDS_KEY),
+    ok.
+-endif.
+
 try_mnesia_or_khepri(MnesiaFun, KhepriFun) ->
-    case rabbit_khepri:is_enabled(non_blocking) of
+    case use_khepri() of
         true ->
             KhepriFun();
         false ->
@@ -299,13 +324,32 @@ try_mnesia_or_khepri(MnesiaFun, KhepriFun) ->
                                "metadata store was enabled in parallel and "
                                "retry",
                                [Table]),
-                            _ = rabbit_khepri:is_enabled(),
+                            _ = is_enabled(),
                             try_mnesia_or_khepri(MnesiaFun, KhepriFun);
                         false ->
                             erlang:raise(Class, Reason, Stacktrace)
                     end
             end
     end.
+
+-ifdef(TEST).
+use_khepri() ->
+    case get_forced_metadata_store() of
+        khepri ->
+            %% We use ?MODULE:is_enabled() to make sure the call goes through
+            %% the possiblity mocked module.
+            ?assert(?MODULE:is_enabled(non_blocking)),
+            true;
+        mnesia ->
+            ?assertNot(?MODULE:is_enabled(non_blocking)),
+            false;
+        undefined ->
+            ?MODULE:is_enabled(non_blocking)
+    end.
+-else.
+use_khepri() ->
+    is_enabled(non_blocking).
+-endif.
 
 is_mnesia_table_covered_by_feature_flag(rabbit_vhost)            -> true;
 is_mnesia_table_covered_by_feature_flag(rabbit_user)             -> true;
