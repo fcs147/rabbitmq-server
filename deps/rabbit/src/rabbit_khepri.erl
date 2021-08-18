@@ -33,6 +33,7 @@
          match_and_get_data/1,
          exists/1,
          multi_query/1,
+         multi_query_and_get_data/1,
          find/1,
          list/1,
          list_child_nodes/1,
@@ -216,13 +217,19 @@ match(Path) -> khepri:get(?STORE_ID, Path).
 
 match_and_get_data(Path) ->
     Ret = match(Path),
-    keep_data_only(Ret).
+    keep_data_only_in_result(Ret).
 
 exists(Path) -> khepri:exists(?STORE_ID, Path).
 find(Path) -> khepri:find(?STORE_ID, Path).
 
 multi_query(PathList) ->
     khepri:multi_query(?STORE_ID, PathList).
+
+multi_query_and_get_data(PathList) ->
+    [case is_tuple(Ret) of
+         true  -> keep_data_only_in_result(Ret);
+         false -> Ret
+     end || Ret <- multi_query(PathList)].
 
 list(Path) -> khepri:list(?STORE_ID, Path).
 
@@ -239,16 +246,19 @@ list_child_nodes(Path) ->
 
 list_child_data(Path) ->
     Ret = list(Path),
-    keep_data_only(Ret).
+    keep_data_only_in_result(Ret).
 
-keep_data_only({ok, Result}) ->
-    Result1 = maps:fold(
-                fun
-                    (Path, #{data := Data}, Acc) -> Acc#{Path => Data};
-                    (_, _, Acc)                  -> Acc
-                end, #{}, Result),
+keep_data_only(Result) ->
+    maps:fold(
+      fun
+          (Path, #{data := Data}, Acc) -> Acc#{Path => Data};
+          (_, _, Acc)                  -> Acc
+      end, #{}, Result).
+
+keep_data_only_in_result({ok, Result}) ->
+    Result1 = keep_data_only(Result),
     {ok, Result1};
-keep_data_only(Error) ->
+keep_data_only_in_result(Error) ->
     Error.
 
 clear_data(Path) -> khepri:clear_data(?STORE_ID, Path).

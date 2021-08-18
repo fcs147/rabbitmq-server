@@ -1200,6 +1200,33 @@ list_user_permissions(_) ->
                 _With,
                 rabbit_auth_backend_internal:match_user_vhost('_', '_'),
                 ?user_perm_path(?STAR, ?STAR)))),
+     ?with(?assertEqual(
+              [rabbit_auth_backend_internal:extract_user_permission_params(
+                 rabbit_auth_backend_internal:vhost_perms_info_keys(),
+                 UserPermissionA1),
+               rabbit_auth_backend_internal:extract_user_permission_params(
+                 rabbit_auth_backend_internal:vhost_perms_info_keys(),
+                 UserPermissionB1)],
+              lists:sort(
+                rabbit_auth_backend_internal:list_vhost_permissions(
+                  VHostNameA)))),
+     ?with(?assertEqual(
+              [rabbit_auth_backend_internal:extract_user_permission_params(
+                 rabbit_auth_backend_internal:user_perms_info_keys(),
+                 UserPermissionA1),
+               rabbit_auth_backend_internal:extract_user_permission_params(
+                 rabbit_auth_backend_internal:user_perms_info_keys(),
+                 UserPermissionA2)],
+              lists:sort(
+                rabbit_auth_backend_internal:list_user_permissions(
+                  UsernameA)))),
+     ?with(?assertEqual(
+              [rabbit_auth_backend_internal:extract_user_permission_params(
+                 rabbit_auth_backend_internal:user_vhost_perms_info_keys(),
+                 UserPermissionA1)],
+              lists:sort(
+                rabbit_auth_backend_internal:list_user_vhost_permissions(
+                  UsernameA, VHostNameA)))),
      ?with(check_storage(
              _With,
              [{mnesia, rabbit_vhost, [VHostA, VHostB]},
@@ -1735,6 +1762,34 @@ list_topic_permissions(_) ->
                 rabbit_auth_backend_internal:
                 match_user_vhost_topic_permission('_', '_', '_'),
                 ?topic_perm_path(?STAR, ?STAR, ?STAR)))),
+     ?with(?assertEqual(
+              [rabbit_auth_backend_internal:extract_topic_permission_params(
+                 rabbit_auth_backend_internal:vhost_topic_perms_info_keys(),
+                 TopicPermissionA1),
+               rabbit_auth_backend_internal:extract_topic_permission_params(
+                 rabbit_auth_backend_internal:vhost_topic_perms_info_keys(),
+                 TopicPermissionB1)],
+              lists:sort(
+                rabbit_auth_backend_internal:list_vhost_topic_permissions(
+                  VHostNameA)))),
+     ?with(?assertEqual(
+              [rabbit_auth_backend_internal:extract_topic_permission_params(
+                 rabbit_auth_backend_internal:user_topic_perms_info_keys(),
+                 TopicPermissionA1),
+               rabbit_auth_backend_internal:extract_topic_permission_params(
+                 rabbit_auth_backend_internal:user_topic_perms_info_keys(),
+                 TopicPermissionA2)],
+              lists:sort(
+                rabbit_auth_backend_internal:list_user_topic_permissions(
+                  UsernameA)))),
+     ?with(?assertEqual(
+              [rabbit_auth_backend_internal:extract_topic_permission_params(
+                 rabbit_auth_backend_internal:
+                 user_vhost_topic_perms_info_keys(),
+                 TopicPermissionA1)],
+              lists:sort(
+                rabbit_auth_backend_internal:list_user_vhost_topic_permissions(
+                  UsernameA, VHostNameA)))),
      ?with(check_storage(
              _With,
              [{mnesia, rabbit_vhost, [VHostA, VHostB]},

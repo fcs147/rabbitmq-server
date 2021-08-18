@@ -36,6 +36,8 @@
 -export([user_info_keys/0, perms_info_keys/0,
          user_perms_info_keys/0, vhost_perms_info_keys/0,
          user_vhost_perms_info_keys/0, all_users/0,
+         user_topic_perms_info_keys/0, vhost_topic_perms_info_keys/0,
+         user_vhost_topic_perms_info_keys/0,
          list_users/0, list_users/2, list_permissions/0,
          list_user_permissions/1, list_user_permissions/3,
          list_topic_permissions/0,
@@ -87,7 +89,10 @@
          clear_topic_permissions_in_mnesia/2,
          clear_topic_permissions_in_mnesia/3,
          clear_topic_permissions_in_khepri/2,
-         clear_topic_permissions_in_khepri/3]).
+         clear_topic_permissions_in_khepri/3,
+
+         extract_user_permission_params/2,
+         extract_topic_permission_params/2]).
 -endif.
 
 -import(rabbit_data_coercion, [to_atom/1, to_list/1, to_binary/1]).
@@ -1300,7 +1305,7 @@ list_user_permissions_khepri_thunk(?STAR, VHostName) ->
     fun() ->
             Qs = [{rabbit_vhost:khepri_vhost_path(VHostName), exists},
                   khepri_user_permission_path(?STAR, VHostName)],
-            case rabbit_khepri:multi_query(Qs) of
+            case rabbit_khepri:multi_query_and_get_data(Qs) of
                 [true, Ret] -> Ret;
                 [false, _] -> throw({error, {no_such_vhost, VHostName}});
                 Error -> Error
@@ -1312,7 +1317,7 @@ list_user_permissions_khepri_thunk(Username, ?STAR) ->
     fun() ->
             Qs = [{khepri_user_path(Username), exists},
                   khepri_user_permission_path(Username, ?STAR)],
-            case rabbit_khepri:multi_query(Qs) of
+            case rabbit_khepri:multi_query_and_get_data(Qs) of
                 [true, Ret] -> Ret;
                 [false, _] -> throw({error, {no_such_user, Username}});
                 Error -> Error
@@ -1325,7 +1330,7 @@ list_user_permissions_khepri_thunk(Username, VHostName) ->
             Qs = [{khepri_user_path(Username), exists},
                   {rabbit_vhost:khepri_vhost_path(VHostName), exists},
                   khepri_user_permission_path(Username, VHostName)],
-            case rabbit_khepri:multi_query(Qs) of
+            case rabbit_khepri:multi_query_and_get_data(Qs) of
                 [true, true, Ret] -> Ret;
                 [false, _, _] -> throw({error, {no_such_user, Username}});
                 [_, false, _] -> throw({error, {no_such_vhost, VHostName}});
@@ -1434,7 +1439,7 @@ list_topic_permissions_khepri_thunk(?STAR, VHostName) ->
     fun() ->
             Qs = [{rabbit_vhost:khepri_vhost_path(VHostName), exists},
                   khepri_topic_permission_path(?STAR, VHostName, ?STAR)],
-            case rabbit_khepri:multi_query(Qs) of
+            case rabbit_khepri:multi_query_and_get_data(Qs) of
                 [true, Ret] -> Ret;
                 [false, _] -> throw({error, {no_such_vhost, VHostName}});
                 Error -> Error
@@ -1446,7 +1451,7 @@ list_topic_permissions_khepri_thunk(Username, ?STAR) ->
     fun() ->
             Qs = [{khepri_user_path(Username), exists},
                   khepri_topic_permission_path(Username, ?STAR, ?STAR)],
-            case rabbit_khepri:multi_query(Qs) of
+            case rabbit_khepri:multi_query_and_get_data(Qs) of
                 [true, Ret] -> Ret;
                 [false, _] -> throw({error, {no_such_user, Username}});
                 Error -> Error
@@ -1459,7 +1464,7 @@ list_topic_permissions_khepri_thunk(Username, VHostName) ->
             Qs = [{khepri_user_path(Username), exists},
                   {rabbit_vhost:khepri_vhost_path(VHostName), exists},
                   khepri_topic_permission_path(Username, VHostName, ?STAR)],
-            case rabbit_khepri:multi_query(Qs) of
+            case rabbit_khepri:multi_query_and_get_data(Qs) of
                 [true, true, Ret] -> Ret;
                 [false, _, _] -> throw({error, {no_such_user, Username}});
                 [_, false, _] -> throw({error, {no_such_vhost, VHostName}});
