@@ -158,6 +158,16 @@ erlang_lib(
     )
 
     github_bazel_erlang_lib(
+        name = "khepri",
+        org = "rabbitmq",
+        ref = "wip",
+        version = "wip",
+        deps = [
+            "@ra//:bazel_erlang_lib",
+        ],
+    )
+
+    github_bazel_erlang_lib(
         name = "meck",
         org = "eproxus",
     )

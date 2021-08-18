@@ -143,6 +143,7 @@ _APP_ENV = """[
 DEPS = [
     "//deps/amqp10_common:bazel_erlang_lib",
     "//deps/rabbit_common:bazel_erlang_lib",
+    "@khepri//:bazel_erlang_lib",
     "@ra//:bazel_erlang_lib",
     "@ranch//:bazel_erlang_lib",
     "@stdout_formatter//:bazel_erlang_lib",
@@ -482,6 +483,10 @@ suites = [
             ":rabbit_ha_test_consumer",
             ":rabbit_ha_test_producer",
         ],
+    ),
+    rabbitmq_suite(
+        name = "metadata_store_phase1_SUITE",
+        size = "small",
     ),
     rabbitmq_integration_suite(
         PACKAGE,
