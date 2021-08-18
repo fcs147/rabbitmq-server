@@ -55,6 +55,7 @@
          write_topic_permission_for_non_existing_user/1,
          write_topic_permission_for_existing_user/1,
          list_topic_permissions_on_non_existing_vhost/1,
+         list_topic_permissions_for_non_existing_user/1,
          list_topic_permissions/1,
          clear_specific_topic_permission/1,
          clear_all_topic_permissions/1,
@@ -120,6 +121,7 @@ groups() ->
          write_topic_permission_for_non_existing_user,
          write_topic_permission_for_existing_user,
          list_topic_permissions_on_non_existing_vhost,
+         list_topic_permissions_for_non_existing_user,
          list_topic_permissions,
          clear_specific_topic_permission,
          clear_all_topic_permissions,
@@ -1105,6 +1107,10 @@ list_user_permissions_for_non_existing_user(_) ->
                 VHostName))),
      ?with(?assertThrow(
               {error, {no_such_user, Username}},
+              rabbit_auth_backend_internal:list_user_permissions(
+                Username))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
               rabbit_auth_backend_internal:list_user_vhost_permissions(
                 Username, VHostName))),
      ?with(check_storage(
@@ -1571,36 +1577,72 @@ write_topic_permission_for_existing_user(_) ->
          [verbose])).
 
 list_topic_permissions_on_non_existing_vhost(_) ->
-    UsernameA = <<"alice">>,
-    UserA = internal_user:create_user(UsernameA, <<"password">>, undefined),
-    UsernameB = <<"bob">>,
-    UserB = internal_user:create_user(UsernameB, <<"password">>, undefined),
+    VHostName = <<"non-existing-vhost">>,
+    Username = <<"alice">>,
+    User = internal_user:create_user(Username, <<"password">>, undefined),
 
     Tests =
     [
      ?with(?assertEqual(
               ok,
-              add_user(_With, UsernameA, UserA))),
-     ?with(?assertEqual(
-              ok,
-              add_user(_With, UsernameB, UserB))),
-     ?with(?assertEqual(
-              [],
-              list_topic_permissions(
-                _With,
-                rabbit_auth_backend_internal:
-                match_user_vhost_topic_permission('_', '_', '_'),
-                ?topic_perm_path(?STAR, ?STAR, ?STAR)))),
+              add_user(_With, Username, User))),
+     ?with(?assertThrow(
+              {error, {no_such_vhost, VHostName}},
+              rabbit_auth_backend_internal:list_vhost_topic_permissions(
+                VHostName))),
+     ?with(?assertThrow(
+              {error, {no_such_vhost, VHostName}},
+              rabbit_auth_backend_internal:list_user_vhost_topic_permissions(
+                Username, VHostName))),
      ?with(check_storage(
              _With,
              [{mnesia, rabbit_vhost, []},
-              {mnesia, rabbit_user, [UserA, UserB]},
+              {mnesia, rabbit_user, [User]},
               {mnesia, rabbit_topic_permission, []},
               {khepri, [rabbit_vhost],
                #{}},
               {khepri, [rabbit_auth_backend_internal],
-               #{?user_path(UsernameA) => UserA,
-                 ?user_path(UsernameB) => UserB}}]))
+               #{?user_path(Username) => User}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
+list_topic_permissions_for_non_existing_user(_) ->
+    VHostName = <<"vhost">>,
+    VHostDesc = <<>>,
+    VHostTags = [],
+    VHost = vhost_v1:new(VHostName, VHostTags),
+    Username = <<"non-existing-user">>,
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              [],
+              rabbit_auth_backend_internal:list_vhost_topic_permissions(
+                VHostName))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              rabbit_auth_backend_internal:list_user_topic_permissions(
+                Username))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              rabbit_auth_backend_internal:list_user_vhost_topic_permissions(
+                Username, VHostName))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, [VHost]},
+              {mnesia, rabbit_user, []},
+              {mnesia, rabbit_topic_permission, []},
+              {khepri, [rabbit_vhost], #{?vhost_path(VHostName) => VHost}},
+              {khepri, [rabbit_auth_backend_internal], #{}}]))
     ],
 
     ?assertEqual(

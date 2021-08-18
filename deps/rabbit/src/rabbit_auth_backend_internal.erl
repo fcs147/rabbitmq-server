@@ -894,8 +894,7 @@ clear_topic_permissions_in_mnesia(Username, VirtualHost) ->
         end)).
 
 clear_topic_permissions_in_khepri(Username, VirtualHost) ->
-    Path = khepri_topic_permission_path(
-             Username, VirtualHost, #if_name_matches{regex = any}),
+    Path = khepri_topic_permission_path(Username, VirtualHost, ?STAR),
     case rabbit_khepri:delete(Path) of
         ok ->
             ok;
@@ -1253,31 +1252,26 @@ filter_props(Keys, Props) -> [T || T = {K, _} <- Props, lists:member(K, Keys)].
         (rabbit_types:username()) -> [rabbit_types:infos()].
 
 list_user_permissions(Username) ->
-    QueryThunk = with_user(Username, match_user_vhost(Username, '_')),
-    Path = khepri_user_permission_path(Username,
-                                       #if_name_matches{regex = any}),
-    list_permissions(user_perms_info_keys(), QueryThunk, Path).
+    MnesiaThunk = with_user(Username, match_user_vhost(Username, '_')),
+    KhepriThunk = list_user_permissions_khepri_thunk(Username, ?STAR),
+    list_permissions(user_perms_info_keys(), MnesiaThunk, KhepriThunk).
 
 -spec list_user_permissions
         (rabbit_types:username(), reference(), pid()) -> 'ok'.
 
 list_user_permissions(Username, Ref, AggregatorPid) ->
-    QueryThunk = with_user(Username, match_user_vhost(Username, '_')),
-    Path = khepri_user_permission_path(Username,
-                                       #if_name_matches{regex = any}),
+    MnesiaThunk = with_user(Username, match_user_vhost(Username, '_')),
+    KhepriThunk = list_user_permissions_khepri_thunk(Username, ?STAR),
     list_permissions(
-      user_perms_info_keys(), QueryThunk, Path, Ref, AggregatorPid).
+      user_perms_info_keys(), MnesiaThunk, KhepriThunk, Ref, AggregatorPid).
 
 -spec list_vhost_permissions
         (rabbit_types:vhost()) -> [rabbit_types:infos()].
 
 list_vhost_permissions(VHostPath) ->
-    %% FIXME: Throw an exception if Khepri is used and the vhost doesn't
-    %% exist. Do that for all functions in the "list_vhost*" family. Likewise
-    %% for the "list_user*" family.
     MnesiaThunk = rabbit_vhost:with(
                    VHostPath, match_user_vhost('_', VHostPath)),
-    KhepriThunk = list_user_permissions_khepri_thunk(VHostPath),
+    KhepriThunk = list_user_permissions_khepri_thunk(?STAR, VHostPath),
     list_permissions(vhost_perms_info_keys(), MnesiaThunk, KhepriThunk).
 
 -spec list_vhost_permissions
@@ -1286,7 +1280,7 @@ list_vhost_permissions(VHostPath) ->
 list_vhost_permissions(VHostPath, Ref, AggregatorPid) ->
     MnesiaThunk = rabbit_vhost:with(
                     VHostPath, match_user_vhost('_', VHostPath)),
-    KhepriThunk = list_user_permissions_khepri_thunk(VHostPath),
+    KhepriThunk = list_user_permissions_khepri_thunk(?STAR, VHostPath),
     list_permissions(
       vhost_perms_info_keys(), MnesiaThunk, KhepriThunk, Ref, AggregatorPid).
 
@@ -1300,19 +1294,30 @@ list_user_vhost_permissions(Username, VHostPath) ->
     KhepriThunk = list_user_permissions_khepri_thunk(Username, VHostPath),
     list_permissions(user_vhost_perms_info_keys(), MnesiaThunk, KhepriThunk).
 
-list_user_permissions_khepri_thunk(VHostName) ->
+list_user_permissions_khepri_thunk(?STAR, VHostName) ->
     %% This is the equivalent of rabbit_vhost:with() but with atomicity in the
     %% case of Khepri.
     fun() ->
             Qs = [{rabbit_vhost:khepri_vhost_path(VHostName), exists},
                   khepri_user_permission_path(?STAR, VHostName)],
             case rabbit_khepri:multi_query(Qs) of
-                [true, Ret] -> ct:pal("Ret -> ~p", [Ret]), Ret;
+                [true, Ret] -> Ret;
                 [false, _] -> throw({error, {no_such_vhost, VHostName}});
                 Error -> Error
             end
-    end.
-
+    end;
+list_user_permissions_khepri_thunk(Username, ?STAR) ->
+    %% This is the equivalent of with_user() but with atomicity in the case of
+    %% Khepri.
+    fun() ->
+            Qs = [{khepri_user_path(Username), exists},
+                  khepri_user_permission_path(Username, ?STAR)],
+            case rabbit_khepri:multi_query(Qs) of
+                [true, Ret] -> Ret;
+                [false, _] -> throw({error, {no_such_user, Username}});
+                Error -> Error
+            end
+    end;
 list_user_permissions_khepri_thunk(Username, VHostName) ->
     %% This is the equivalent of rabbit_vhost:with_user_and_vhost() but with
     %% atomicity in the case of Khepri.
@@ -1358,52 +1363,52 @@ match_user_vhost(Username, VHostPath) ->
 
 list_topic_permissions() ->
     QueryThunk = match_user_vhost_topic_permission('_', '_'),
-    Path = khepri_topic_permission_path(#if_name_matches{regex = any},
-                                        #if_name_matches{regex = any},
-                                        #if_name_matches{regex = any}),
+    Path = khepri_topic_permission_path(?STAR, ?STAR, ?STAR),
     list_topic_permissions(topic_perms_info_keys(), QueryThunk, Path).
 
 list_user_topic_permissions(Username) ->
-    QueryThunk = with_user(
-                   Username, match_user_vhost_topic_permission(Username, '_')),
-    Path = khepri_topic_permission_path(Username,
-                                        #if_name_matches{regex = any},
-                                        #if_name_matches{regex = any}),
-    list_topic_permissions(user_topic_perms_info_keys(), QueryThunk, Path).
+    MnesiaThunk = with_user(
+                    Username,
+                    match_user_vhost_topic_permission(Username, '_')),
+    KhepriThunk = list_topic_permissions_khepri_thunk(Username, ?STAR),
+    list_topic_permissions(
+      user_topic_perms_info_keys(), MnesiaThunk, KhepriThunk).
 
 list_vhost_topic_permissions(VHost) ->
-    QueryThunk = rabbit_vhost:with(
-                   VHost, match_user_vhost_topic_permission('_', VHost)),
-    Path = khepri_topic_permission_path(#if_name_matches{regex = any},
-                                        VHost,
-                                        #if_name_matches{regex = any}),
-    list_topic_permissions(vhost_topic_perms_info_keys(), QueryThunk, Path).
+    MnesiaThunk = rabbit_vhost:with(
+                    VHost, match_user_vhost_topic_permission('_', VHost)),
+    KhepriThunk = list_topic_permissions_khepri_thunk(?STAR, VHost),
+    list_topic_permissions(
+      vhost_topic_perms_info_keys(), MnesiaThunk, KhepriThunk).
 
 list_user_vhost_topic_permissions(Username, VHost) ->
-    QueryThunk = rabbit_vhost:with_user_and_vhost(
-                   Username, VHost,
-                   match_user_vhost_topic_permission(Username, VHost)),
-    Path = khepri_topic_permission_path(Username,
-                                        VHost,
-                                        #if_name_matches{regex = any}),
+    MnesiaThunk = rabbit_vhost:with_user_and_vhost(
+                    Username, VHost,
+                    match_user_vhost_topic_permission(Username, VHost)),
+    KhepriThunk = list_topic_permissions_khepri_thunk(Username, VHost),
     list_topic_permissions(
-      user_vhost_topic_perms_info_keys(), QueryThunk, Path).
+      user_vhost_topic_perms_info_keys(), MnesiaThunk, KhepriThunk).
 
-list_topic_permissions(Keys, QueryThunk, Path) ->
+list_topic_permissions(Keys, QueryThunk, PathOrThunk) ->
     TopicPermissions = rabbit_khepri:try_mnesia_or_khepri(
                          fun() ->
                                  list_topic_permissions_in_mnesia(QueryThunk)
                          end,
                          fun() ->
-                                 list_topic_permissions_in_khepri(Path)
+                                 list_topic_permissions_in_khepri(PathOrThunk)
                          end),
     [extract_topic_permission_params(Keys, U) || U <- TopicPermissions].
 
 list_topic_permissions_in_mnesia(QueryThunk) ->
     rabbit_misc:execute_mnesia_transaction(QueryThunk).
 
-list_topic_permissions_in_khepri(Path) ->
+list_topic_permissions_in_khepri(Path) when is_list(Path) ->
     case rabbit_khepri:match_and_get_data(Path) of
+        {ok, TopicPermissions} -> maps:values(TopicPermissions);
+        _                      -> []
+    end;
+list_topic_permissions_in_khepri(QueryThunk) ->
+    case QueryThunk() of
         {ok, TopicPermissions} -> maps:values(TopicPermissions);
         _                      -> []
     end.
@@ -1421,6 +1426,45 @@ match_user_vhost_topic_permission(Username, VHostPath, Exchange) ->
             exchange = Exchange},
             permission = '_'},
         read)
+    end.
+
+list_topic_permissions_khepri_thunk(?STAR, VHostName) ->
+    %% This is the equivalent of rabbit_vhost:with() but with atomicity in the
+    %% case of Khepri.
+    fun() ->
+            Qs = [{rabbit_vhost:khepri_vhost_path(VHostName), exists},
+                  khepri_topic_permission_path(?STAR, VHostName, ?STAR)],
+            case rabbit_khepri:multi_query(Qs) of
+                [true, Ret] -> Ret;
+                [false, _] -> throw({error, {no_such_vhost, VHostName}});
+                Error -> Error
+            end
+    end;
+list_topic_permissions_khepri_thunk(Username, ?STAR) ->
+    %% This is the equivalent of with_user() but with atomicity in the case of
+    %% Khepri.
+    fun() ->
+            Qs = [{khepri_user_path(Username), exists},
+                  khepri_topic_permission_path(Username, ?STAR, ?STAR)],
+            case rabbit_khepri:multi_query(Qs) of
+                [true, Ret] -> Ret;
+                [false, _] -> throw({error, {no_such_user, Username}});
+                Error -> Error
+            end
+    end;
+list_topic_permissions_khepri_thunk(Username, VHostName) ->
+    %% This is the equivalent of rabbit_vhost:with_user_and_vhost() but with
+    %% atomicity in the case of Khepri.
+    fun() ->
+            Qs = [{khepri_user_path(Username), exists},
+                  {rabbit_vhost:khepri_vhost_path(VHostName), exists},
+                  khepri_topic_permission_path(Username, VHostName, ?STAR)],
+            case rabbit_khepri:multi_query(Qs) of
+                [true, true, Ret] -> Ret;
+                [false, _, _] -> throw({error, {no_such_user, Username}});
+                [_, false, _] -> throw({error, {no_such_vhost, VHostName}});
+                Error -> Error
+            end
     end.
 
 extract_topic_permission_params(Keys, #topic_permission{
