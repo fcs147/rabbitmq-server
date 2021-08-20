@@ -29,6 +29,8 @@
          list_vhost_objects/1,
          update_non_existing_vhost/1,
          update_existing_vhost/1,
+         update_non_existing_vhost_desc_and_tags/1,
+         update_existing_vhost_desc_and_tags/1,
          delete_non_existing_vhost/1,
          delete_existing_vhost/1,
 
@@ -84,6 +86,8 @@ groups() ->
        list_vhost_objects,
        update_non_existing_vhost,
        update_existing_vhost,
+       update_non_existing_vhost_desc_and_tags,
+       update_existing_vhost_desc_and_tags,
        delete_non_existing_vhost,
        delete_existing_vhost
       ]
@@ -208,6 +212,16 @@ setup_code_mocking(Config) ->
       rabbit_vhost_sup_sup, is_vhost_alive,
       fun(_) -> true end),
 
+    %% We ensure that we use the `vhost_v2` #vhost{} record so we can play
+    %% with the description and tags.
+    meck:new(rabbit_feature_flags, [passthrough, no_link]),
+    meck:expect(
+      rabbit_feature_flags, is_enabled,
+      fun
+          (virtual_host_metadata) -> true;
+          (FeatureNames)           -> meck:passthrough([FeatureNames])
+      end),
+
     ct:pal("Mocked: ~p", [meck:mocked()]),
     Config.
 
@@ -285,7 +299,11 @@ write_non_existing_vhost(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
 
     Tests =
     [
@@ -316,7 +334,11 @@ write_existing_vhost(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
 
     Tests =
     [
@@ -353,7 +375,11 @@ check_vhost_exists(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
 
     Tests =
     [
@@ -382,7 +408,11 @@ get_existing_vhost_info(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
 
     Tests =
     [
@@ -391,7 +421,11 @@ get_existing_vhost_info(_) ->
               add_vhost(_With, VHostName, VHostDesc, VHostTags))),
      ?with(?assertEqual(
               [{name, VHostName},
-               {tracing,false},
+               {description, VHostDesc},
+               {tags, VHostTags},
+               {metadata, #{description => VHostDesc,
+                            tags => VHostTags}},
+               {tracing, false},
                {cluster_state, [{node(), running}]}],
               vhost_info(_With, VHostName)))
     ],
@@ -407,11 +441,19 @@ list_vhost_names(_) ->
     VHostNameA = <<"vhost-a">>,
     VHostDescA = <<>>,
     VHostTagsA = [],
-    VHostA = vhost_v1:new(VHostNameA, VHostTagsA),
+    VHostA = vhost:new(
+               VHostNameA,
+               VHostTagsA,
+               #{description => VHostDescA,
+                 tags => VHostTagsA}),
     VHostNameB = <<"vhost-b">>,
     VHostDescB = <<>>,
     VHostTagsB = [],
-    VHostB = vhost_v1:new(VHostNameB, VHostTagsB),
+    VHostB = vhost:new(
+               VHostNameB,
+               VHostTagsB,
+               #{description => VHostDescB,
+                 tags => VHostTagsB}),
 
     Tests =
     [
@@ -443,11 +485,19 @@ list_vhost_objects(_) ->
     VHostNameA = <<"vhost-a">>,
     VHostDescA = <<>>,
     VHostTagsA = [],
-    VHostA = vhost_v1:new(VHostNameA, VHostTagsA),
+    VHostA = vhost:new(
+               VHostNameA,
+               VHostTagsA,
+               #{description => VHostDescA,
+                 tags => VHostTagsA}),
     VHostNameB = <<"vhost-b">>,
     VHostDescB = <<>>,
     VHostTagsB = [],
-    VHostB = vhost_v1:new(VHostNameB, VHostTagsB),
+    VHostB = vhost:new(
+               VHostNameB,
+               VHostTagsB,
+               #{description => VHostDescB,
+                 tags => VHostTagsB}),
 
     Tests =
     [
@@ -477,9 +527,14 @@ list_vhost_objects(_) ->
 
 update_non_existing_vhost(_) ->
     VHostName = <<"vhost">>,
+    VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
-    UpdatedVHost = vhost_v1:set_limits(VHost, [limits]),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
+    UpdatedVHost = vhost:set_limits(VHost, [limits]),
     Fun = fun(_) -> UpdatedVHost end,
     ?assertNotEqual(VHost, UpdatedVHost),
 
@@ -512,8 +567,12 @@ update_existing_vhost(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
-    UpdatedVHost = vhost_v1:set_limits(VHost, [limits]),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
+    UpdatedVHost = vhost:set_limits(VHost, [limits]),
     Fun = fun(_) -> UpdatedVHost end,
     ?assertNotEqual(VHost, UpdatedVHost),
 
@@ -528,6 +587,82 @@ update_existing_vhost(_) ->
      ?with(?assertEqual(
               UpdatedVHost,
               update_vhost(_With, VHostName, Fun))),
+     ?with(?assertEqual(
+              UpdatedVHost,
+              lookup_vhost(_With, VHostName))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, [UpdatedVHost]},
+              {khepri, [rabbit_vhost],
+               #{?vhost_path(VHostName) => UpdatedVHost}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
+update_non_existing_vhost_desc_and_tags(_) ->
+    VHostName = <<"vhost">>,
+    NewVHostDesc = <<"New desc">>,
+    NewVHostTags = [new_tag],
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              {error, {no_such_vhost, VHostName}},
+              lookup_vhost(_With, VHostName))),
+     ?with(?assertEqual(
+              {error, {no_such_vhost, VHostName}},
+              update_vhost(_With, VHostName, NewVHostDesc, NewVHostTags))),
+     ?with(?assertEqual(
+              {error, {no_such_vhost, VHostName}},
+              lookup_vhost(_With, VHostName))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, []},
+              {khepri, [rabbit_vhost],
+               #{}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
+update_existing_vhost_desc_and_tags(_) ->
+    VHostName = <<"vhost">>,
+    VHostDesc = <<>>,
+    VHostTags = [],
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
+    NewVHostDesc = <<"New desc">>,
+    NewVHostTags = [new_tag],
+    UpdatedVHost = vhost:set_metadata(
+                     VHost,
+                     #{description => NewVHostDesc,
+                       tags => NewVHostTags}),
+    ct:pal("VHost: ~p~nUpdatedVHost: ~p", [VHost, UpdatedVHost]),
+    ?assertNotEqual(VHost, UpdatedVHost),
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              {error, {no_such_vhost, VHostName}},
+              lookup_vhost(_With, VHostName))),
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertEqual(
+              {ok, UpdatedVHost},
+              update_vhost(_With, VHostName, NewVHostDesc, NewVHostTags))),
      ?with(?assertEqual(
               UpdatedVHost,
               lookup_vhost(_With, VHostName))),
@@ -606,7 +741,11 @@ delete_existing_vhost(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
 
     Tests =
     [
@@ -916,7 +1055,11 @@ write_user_permission_for_non_existing_user(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     UserPermission = #user_permission{
                         user_vhost = #user_vhost{
@@ -961,7 +1104,11 @@ write_user_permission_for_existing_user(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     UserPermission = #user_permission{
@@ -1013,7 +1160,11 @@ check_resource_access(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     UserPermission = #user_permission{
@@ -1093,7 +1244,11 @@ list_user_permissions_for_non_existing_user(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"non-existing-user">>,
 
     Tests =
@@ -1133,11 +1288,19 @@ list_user_permissions(_) ->
     VHostNameA = <<"vhost-a">>,
     VHostDescA = <<>>,
     VHostTagsA = [],
-    VHostA = vhost_v1:new(VHostNameA, VHostTagsA),
+    VHostA = vhost:new(
+               VHostNameA,
+               VHostTagsA,
+               #{description => VHostDescA,
+                 tags => VHostTagsA}),
     VHostNameB = <<"vhost-b">>,
     VHostDescB = <<>>,
     VHostTagsB = [],
-    VHostB = vhost_v1:new(VHostNameB, VHostTagsB),
+    VHostB = vhost:new(
+               VHostNameB,
+               VHostTagsB,
+               #{description => VHostDescB,
+                 tags => VHostTagsB}),
     UsernameA = <<"alice">>,
     UserA = internal_user:create_user(UsernameA, <<"password">>, undefined),
     UsernameB = <<"bob">>,
@@ -1259,7 +1422,11 @@ clear_user_permission(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     UserPermission = #user_permission{
@@ -1313,7 +1480,11 @@ delete_user_and_check_resource_access(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     UserPermission = #user_permission{
@@ -1371,7 +1542,11 @@ delete_vhost_and_check_resource_access(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     UserPermission = #user_permission{
@@ -1487,7 +1662,11 @@ write_topic_permission_for_non_existing_user(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     Exchange = <<"exchange">>,
     TopicPermission = #topic_permission{
@@ -1542,7 +1721,11 @@ write_topic_permission_for_existing_user(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     Exchange = <<"exchange">>,
@@ -1643,7 +1826,11 @@ list_topic_permissions_for_non_existing_user(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"non-existing-user">>,
 
     Tests =
@@ -1683,11 +1870,19 @@ list_topic_permissions(_) ->
     VHostNameA = <<"vhost-a">>,
     VHostDescA = <<>>,
     VHostTagsA = [],
-    VHostA = vhost_v1:new(VHostNameA, VHostTagsA),
+    VHostA = vhost:new(
+               VHostNameA,
+               VHostTagsA,
+               #{description => VHostDescA,
+                 tags => VHostTagsA}),
     VHostNameB = <<"vhost-b">>,
     VHostDescB = <<>>,
     VHostTagsB = [],
-    VHostB = vhost_v1:new(VHostNameB, VHostTagsB),
+    VHostB = vhost:new(
+               VHostNameB,
+               VHostTagsB,
+               #{description => VHostDescB,
+                 tags => VHostTagsB}),
     UsernameA = <<"alice">>,
     UserA = internal_user:create_user(UsernameA, <<"password">>, undefined),
     UsernameB = <<"bob">>,
@@ -1822,7 +2017,11 @@ clear_specific_topic_permission(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     ExchangeA = <<"exchange-a">>,
@@ -1924,7 +2123,11 @@ clear_all_topic_permissions(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     ExchangeA = <<"exchange-a">>,
@@ -2024,7 +2227,11 @@ delete_user_and_check_topic_access(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     Exchange = <<"exchange">>,
@@ -2094,7 +2301,11 @@ delete_vhost_and_check_topic_access(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
     VHostTags = [],
-    VHost = vhost_v1:new(VHostName, VHostTags),
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
     Username = <<"alice">>,
     User = internal_user:create_user(Username, <<"password">>, undefined),
     Exchange = <<"exchange">>,
@@ -2211,6 +2422,14 @@ update_vhost(mnesia, VHostName, Fun) ->
       end);
 update_vhost(khepri, VHostName, Fun) ->
     rabbit_vhost:update_in_khepri(VHostName, Fun).
+
+update_vhost(mnesia, VHostName, Description, Tags) ->
+    rabbit_misc:execute_mnesia_transaction(
+      fun() ->
+              rabbit_vhost:update_in_mnesia(VHostName, Description, Tags)
+      end);
+update_vhost(khepri, VHostName, Description, Tags) ->
+    rabbit_vhost:update_in_khepri(VHostName, Description, Tags).
 
 vhost_info(mnesia, VHostName) ->
     rabbit_vhost:info_in_mnesia(VHostName);

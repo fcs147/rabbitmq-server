@@ -43,6 +43,8 @@
          all_in_khepri/0,
          update_in_mnesia/2,
          update_in_khepri/2,
+         update_in_mnesia/3,
+         update_in_khepri/3,
          info_in_mnesia/1,
          info_in_khepri/1,
          internal_delete_in_mnesia_part1/2,
@@ -253,6 +255,21 @@ declare_default_exchanges(Name, ActingUser) ->
 
 -spec update(vhost:name(), binary(), [atom()], rabbit_types:username()) -> rabbit_types:ok_or_error(any()).
 update(Name, Description, Tags, ActingUser) ->
+    Ret = rabbit_khepri:try_mnesia_or_khepri(
+            fun() -> update_in_mnesia(Name, Description, Tags) end,
+            fun() -> update_in_khepri(Name, Description, Tags) end),
+    case Ret of
+        {ok, VHost} ->
+            rabbit_event:notify(vhost_updated, info(VHost)
+                                ++ [{user_who_performed_action, ActingUser},
+                                    {description, Description},
+                                    {tags, Tags}]),
+            ok;
+        _ ->
+            Ret
+    end.
+
+update_in_mnesia(Name, Description, Tags) ->
     rabbit_misc:execute_mnesia_transaction(
           fun () ->
                   case mnesia:wread({rabbit_vhost, Name}) of
@@ -262,13 +279,34 @@ update(Name, Description, Tags, ActingUser) ->
                           VHost = vhost:merge_metadata(VHost0, #{description => Description, tags => Tags}),
                           rabbit_log:debug("Updating a virtual host record ~p", [VHost]),
                           ok = mnesia:write(rabbit_vhost, VHost, write),
-                          rabbit_event:notify(vhost_updated, info(VHost)
-                                ++ [{user_who_performed_action, ActingUser},
-                                    {description, Description},
-                                    {tags, Tags}]),
-                          ok
+                          {ok, VHost}
                   end
           end).
+
+update_in_khepri(Name, Description, Tags) ->
+    Path = khepri_vhost_path(Name),
+    Ret1 = rabbit_khepri:get(Path),
+    case Ret1 of
+        {ok, #{data := VHost0, data_version := DVersion}} ->
+            VHost = vhost:merge_metadata(
+                      VHost0, #{description => Description, tags => Tags}),
+            rabbit_log:debug("Updating a virtual host record ~p", [VHost]),
+            Path1 = khepri_path:combine_with_conditions(
+                      Path, [#if_data_version{version = DVersion}]),
+            Ret2 = rabbit_khepri:insert(Path1, VHost),
+            case Ret2 of
+                ok ->
+                    {ok, VHost};
+                {error, {mismatching_node, #{node_path := Path}}} ->
+                    update_in_khepri(Name, Description, Tags);
+                {error, _} = Error ->
+                    Error
+            end;
+        {error, {node_not_found, _}} ->
+            {error, {no_such_vhost, Name}};
+        {error, _} = Error ->
+            Error
+    end.
 
 -spec delete(vhost:name(), rabbit_types:username()) -> rabbit_types:ok_or_error(any()).
 
