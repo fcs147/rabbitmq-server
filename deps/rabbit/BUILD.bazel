@@ -494,6 +494,7 @@ suites = [
         runtime_deps = [
             "@meck//:bazel_erlang_lib",
             "@ra//:bazel_erlang_lib",
+            "@rabbitmq_ct_helpers//:bazel_erlang_lib",
         ],
     ),
     rabbitmq_integration_suite(
