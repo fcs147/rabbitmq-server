@@ -57,7 +57,7 @@ defmodule RabbitMQ.CLI.Ctl.Commands.JoinClusterCommand do
           target_node_normalised,
           :rabbit_khepri,
           :add_member,
-          [node_name]
+          [node_name, :false]
         )
 
         # TODO: Handle errors.

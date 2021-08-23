@@ -15,7 +15,7 @@
 
 -export([setup/0,
          setup/1,
-         add_member/1,
+         add_member/1, add_member/2,
          members/0,
          locally_known_members/0,
          nodes/0,
@@ -92,7 +92,10 @@ setup(_) ->
             exit(Error)
     end.
 
-add_member(NewNode) when NewNode =/= node() ->
+add_member(NewNode) ->
+    add_member(NewNode, true).
+
+add_member(NewNode, RestartRabbitMQ) when NewNode =/= node() ->
     ?LOG_DEBUG(
        "Trying to add node ~s to Khepri cluster \"~s\" from node ~s",
        [NewNode, ?RA_CLUSTER_NAME, node()],
@@ -127,7 +130,14 @@ add_member(NewNode) when NewNode =/= node() ->
                                "Node ~s added to Khepri cluster \"~s\"",
                                [NewNode, ?RA_CLUSTER_NAME],
                                #{domain => ?RMQLOG_DOMAIN_GLOBAL}),
-                            ok = rpc:call(NewNode, rabbit, start, []);
+                            %% FIXME:
+                            %% 1. Restart Ra server and make sure the cluster
+                            %%    membership change is committed.
+                            %% 2. Add an argument to indicate if RabbitMQ
+                            %%    should be restarted at the end. And don't
+                            %%    restart it if using `join_cluster` CLI
+                            %%    command.
+                            post_add_member(NewNode, RestartRabbitMQ);
                         {error, _} = Error ->
                             ?LOG_ERROR(
                                "Failed to add remote node ~s to Khepri "
@@ -151,6 +161,11 @@ add_member(NewNode) when NewNode =/= node() ->
                #{domain => ?RMQLOG_DOMAIN_GLOBAL}),
             ok
     end.
+
+post_add_member(_, false) ->
+    ok;
+post_add_member(NewNode, true) ->
+    ok = rpc:call(NewNode, rabbit, start, []).
 
 priv_reset() ->
     ok = rabbit:stop(),
