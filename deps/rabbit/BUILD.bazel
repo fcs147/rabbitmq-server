@@ -487,6 +487,11 @@ suites = [
     rabbitmq_suite(
         name = "metadata_store_phase1_SUITE",
         size = "small",
+        runtime_deps = [
+            "@khepri//:bazel_erlang_lib",
+            "@meck//:bazel_erlang_lib",
+            "@ra//:bazel_erlang_lib",
+        ],
     ),
     rabbitmq_integration_suite(
         PACKAGE,
