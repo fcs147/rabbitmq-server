@@ -490,7 +490,7 @@ suites = [
 	deps = [
             "@khepri//:bazel_erlang_lib",
             "//deps/rabbit_common:bazel_erlang_lib",
-	]
+	],
         runtime_deps = [
             "@meck//:bazel_erlang_lib",
             "@ra//:bazel_erlang_lib",
