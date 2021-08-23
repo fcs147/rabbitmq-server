@@ -13,8 +13,8 @@
 -include_lib("rabbit_common/include/rabbit.hrl").
 -include_lib("rabbit_common/include/logging.hrl").
 
--include("include/vhost.hrl").
--include("include/internal_user.hrl").
+-include("vhost.hrl").
+-include("internal_user.hrl").
 
 -export([quorum_queue_migration/3,
          stream_queue_migration/3,
