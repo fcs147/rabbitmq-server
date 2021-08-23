@@ -160,11 +160,9 @@ erlang_lib(
     github_bazel_erlang_lib(
         name = "khepri",
         org = "rabbitmq",
-        ref = "wip",
-        version = "wip",
-        deps = [
-            "@ra//:bazel_erlang_lib",
-        ],
+        ref = "9fe317306f6fd1d23f697c1210635ce9a35d86ec",
+        version = "9fe317306f6fd1d23f697c1210635ce9a35d86ec",
+        build_file = rabbitmq_workspace + "//:BUILD.khepri",
     )
 
     github_bazel_erlang_lib(
