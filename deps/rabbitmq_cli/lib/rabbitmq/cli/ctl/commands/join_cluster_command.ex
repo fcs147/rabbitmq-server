@@ -52,6 +52,8 @@ defmodule RabbitMQ.CLI.Ctl.Commands.JoinClusterCommand do
     case ret1 do
       {:error, _} ->
         ret1
+      {:ok, :already_member} ->
+        ret1
       _ ->
         ret2 = :rabbit_misc.rpc_call(
           target_node_normalised,
@@ -63,7 +65,7 @@ defmodule RabbitMQ.CLI.Ctl.Commands.JoinClusterCommand do
         # TODO: Handle errors.
         case ret2 do
           {:undef, [{:rabbit_khepri, :add_member, _, []}]} ->
-            :ok
+            ret1
           _ ->
             ret2
         end
