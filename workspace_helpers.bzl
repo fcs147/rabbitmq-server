@@ -161,7 +161,7 @@ erlang_lib(
         name = "khepri",
         org = "rabbitmq",
         ref = "9fe317306f6fd1d23f697c1210635ce9a35d86ec",
-        version = "9fe317306f6fd1d23f697c1210635ce9a35d86ec",
+        version = "edd2fddb6d66db0b6d2b30510ec5eebea8eff5e1",
         build_file = rabbitmq_workspace + "//:BUILD.khepri",
     )
 
