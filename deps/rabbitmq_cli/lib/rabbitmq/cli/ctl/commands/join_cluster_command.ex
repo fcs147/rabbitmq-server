@@ -50,11 +50,7 @@ defmodule RabbitMQ.CLI.Ctl.Commands.JoinClusterCommand do
     )
 
     case ret1 do
-      {:error, _} ->
-        ret1
-      {:ok, :already_member} ->
-        ret1
-      _ ->
+      :ok ->
         ret2 = :rabbit_misc.rpc_call(
           target_node_normalised,
           :rabbit_khepri,
@@ -69,6 +65,8 @@ defmodule RabbitMQ.CLI.Ctl.Commands.JoinClusterCommand do
           _ ->
             ret2
         end
+      _ ->
+        ret1
     end
   end
 
