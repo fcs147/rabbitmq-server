@@ -485,12 +485,13 @@ suites = [
         ],
     ),
     rabbitmq_integration_suite(
+        PACKAGE,
         name = "metadata_store_phase1_SUITE",
         size = "small",
-	deps = [
+        deps = [
             "@khepri//:bazel_erlang_lib",
             "//deps/rabbit_common:bazel_erlang_lib",
-	],
+        ],
         runtime_deps = [
             "@meck//:bazel_erlang_lib",
             "@ra//:bazel_erlang_lib",
