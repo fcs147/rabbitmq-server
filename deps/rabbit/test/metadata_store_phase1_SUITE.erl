@@ -49,6 +49,8 @@
          list_user_permissions_on_non_existing_vhost/1,
          list_user_permissions_for_non_existing_user/1,
          list_user_permissions/1,
+         clear_user_permission_for_non_existing_vhost/1,
+         clear_user_permission_for_non_existing_user/1,
          clear_user_permission/1,
          delete_user_and_check_resource_access/1,
          delete_vhost_and_check_resource_access/1,
@@ -59,7 +61,11 @@
          list_topic_permissions_on_non_existing_vhost/1,
          list_topic_permissions_for_non_existing_user/1,
          list_topic_permissions/1,
+         clear_specific_topic_permission_for_non_existing_vhost/1,
+         clear_specific_topic_permission_for_non_existing_user/1,
          clear_specific_topic_permission/1,
+         clear_all_topic_permission_for_non_existing_vhost/1,
+         clear_all_topic_permission_for_non_existing_user/1,
          clear_all_topic_permissions/1,
          delete_user_and_check_topic_access/1,
          delete_vhost_and_check_topic_access/1
@@ -114,6 +120,8 @@ groups() ->
          list_user_permissions_on_non_existing_vhost,
          list_user_permissions_for_non_existing_user,
          list_user_permissions,
+         clear_user_permission_for_non_existing_vhost,
+         clear_user_permission_for_non_existing_user,
          clear_user_permission,
          delete_user_and_check_resource_access,
          delete_vhost_and_check_resource_access
@@ -127,7 +135,11 @@ groups() ->
          list_topic_permissions_on_non_existing_vhost,
          list_topic_permissions_for_non_existing_user,
          list_topic_permissions,
+         clear_specific_topic_permission_for_non_existing_vhost,
+         clear_specific_topic_permission_for_non_existing_user,
          clear_specific_topic_permission,
+         clear_all_topic_permission_for_non_existing_vhost,
+         clear_all_topic_permission_for_non_existing_user,
          clear_all_topic_permissions,
          delete_user_and_check_topic_access,
          delete_vhost_and_check_topic_access
@@ -1418,6 +1430,82 @@ list_user_permissions(_) ->
           {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
+clear_user_permission_for_non_existing_vhost(_) ->
+    VHostName = <<"vhost">>,
+    Username = <<"alice">>,
+    User = internal_user:create_user(Username, <<"password">>, undefined),
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              ok,
+              add_user(_With, Username, User))),
+     ?with(?assertNot(
+              check_vhost_access(_With, Username, VHostName))),
+     ?with(?assertThrow(
+              {error, {no_such_vhost, VHostName}},
+              clear_permissions(_With, Username, VHostName))),
+     ?with(?assertNot(
+              check_vhost_access(_With, Username, VHostName))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, []},
+              {mnesia, rabbit_user, [User]},
+              {mnesia, rabbit_user_permission, []},
+              {khepri, [rabbit_vhost],
+               #{}},
+              {khepri, [rabbit_auth_backend_internal],
+               #{?user_path(Username) => User}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
+clear_user_permission_for_non_existing_user(_) ->
+    VHostName = <<"vhost">>,
+    VHostDesc = <<>>,
+    VHostTags = [],
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
+    Username = <<"alice">>,
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assertNot(
+              check_vhost_access(_With, Username, VHostName))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              clear_permissions(_With, Username, VHostName))),
+     ?with(?assertNot(
+              check_vhost_access(_With, Username, VHostName))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, [VHost]},
+              {mnesia, rabbit_user, []},
+              {mnesia, rabbit_user_permission, []},
+              {khepri, [rabbit_vhost],
+               #{?vhost_path(VHostName) => VHost}},
+              {khepri, [rabbit_auth_backend_internal],
+               #{}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
 clear_user_permission(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
@@ -2013,6 +2101,94 @@ list_topic_permissions(_) ->
           {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
          [verbose])).
 
+clear_specific_topic_permission_for_non_existing_vhost(_) ->
+    VHostName = <<"vhost">>,
+    Username = <<"alice">>,
+    User = internal_user:create_user(Username, <<"password">>, undefined),
+    Exchange = <<"exchange">>,
+    Context = #{routing_key => <<"key">>,
+                variable_map => #{<<"vhost">> => VHostName,
+                                  <<"username">> => Username}},
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              ok,
+              add_user(_With, Username, User))),
+     ?with(?assert(
+              check_topic_access(
+                _With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertThrow(
+              {error, {no_such_vhost, VHostName}},
+              clear_topic_permissions(_With, Username, VHostName, Exchange))),
+     ?with(?assert(
+              check_topic_access(
+                _With, Username, VHostName, Exchange, read, Context))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, []},
+              {mnesia, rabbit_user, [User]},
+              {mnesia, rabbit_user_permission, []},
+              {khepri, [rabbit_vhost],
+               #{}},
+              {khepri, [rabbit_auth_backend_internal],
+               #{?user_path(Username) => User}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
+clear_specific_topic_permission_for_non_existing_user(_) ->
+    VHostName = <<"vhost">>,
+    VHostDesc = <<>>,
+    VHostTags = [],
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
+    Username = <<"alice">>,
+    Exchange = <<"exchange">>,
+    Context = #{routing_key => <<"key">>,
+                variable_map => #{<<"vhost">> => VHostName,
+                                  <<"username">> => Username}},
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assert(
+              check_topic_access(
+                _With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              clear_topic_permissions(_With, Username, VHostName, Exchange))),
+     ?with(?assert(
+              check_topic_access(
+                _With, Username, VHostName, Exchange, read, Context))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, [VHost]},
+              {mnesia, rabbit_user, []},
+              {mnesia, rabbit_user_permission, []},
+              {khepri, [rabbit_vhost],
+               #{?vhost_path(VHostName) => VHost}},
+              {khepri, [rabbit_auth_backend_internal],
+               #{}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
 clear_specific_topic_permission(_) ->
     VHostName = <<"vhost">>,
     VHostDesc = <<>>,
@@ -2110,6 +2286,94 @@ clear_specific_topic_permission(_) ->
                #{?user_path(Username) => User,
                  ?topic_perm_path(Username, VHostName, ExchangeB) =>
                  TopicPermissionB}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
+clear_all_topic_permission_for_non_existing_vhost(_) ->
+    VHostName = <<"vhost">>,
+    Username = <<"alice">>,
+    User = internal_user:create_user(Username, <<"password">>, undefined),
+    Exchange = <<"exchange">>,
+    Context = #{routing_key => <<"key">>,
+                variable_map => #{<<"vhost">> => VHostName,
+                                  <<"username">> => Username}},
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              ok,
+              add_user(_With, Username, User))),
+     ?with(?assert(
+              check_topic_access(
+                _With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertThrow(
+              {error, {no_such_vhost, VHostName}},
+              clear_topic_permissions(_With, Username, VHostName))),
+     ?with(?assert(
+              check_topic_access(
+                _With, Username, VHostName, Exchange, read, Context))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, []},
+              {mnesia, rabbit_user, [User]},
+              {mnesia, rabbit_user_permission, []},
+              {khepri, [rabbit_vhost],
+               #{}},
+              {khepri, [rabbit_auth_backend_internal],
+               #{?user_path(Username) => User}}]))
+    ],
+
+    ?assertEqual(
+       ok,
+       eunit:test(
+         [{setup, fun force_mnesia_use/0, [{with, mnesia, Tests}]},
+          {setup, fun force_khepri_use/0,  [{with, khepri, Tests}]}],
+         [verbose])).
+
+clear_all_topic_permission_for_non_existing_user(_) ->
+    VHostName = <<"vhost">>,
+    VHostDesc = <<>>,
+    VHostTags = [],
+    VHost = vhost:new(
+              VHostName,
+              VHostTags,
+              #{description => VHostDesc,
+                tags => VHostTags}),
+    Username = <<"alice">>,
+    Exchange = <<"exchange">>,
+    Context = #{routing_key => <<"key">>,
+                variable_map => #{<<"vhost">> => VHostName,
+                                  <<"username">> => Username}},
+
+    Tests =
+    [
+     ?with(?assertEqual(
+              VHost,
+              add_vhost(_With, VHostName, VHostDesc, VHostTags))),
+     ?with(?assert(
+              check_topic_access(
+                _With, Username, VHostName, Exchange, read, Context))),
+     ?with(?assertThrow(
+              {error, {no_such_user, Username}},
+              clear_topic_permissions(_With, Username, VHostName))),
+     ?with(?assert(
+              check_topic_access(
+                _With, Username, VHostName, Exchange, read, Context))),
+     ?with(check_storage(
+             _With,
+             [{mnesia, rabbit_vhost, [VHost]},
+              {mnesia, rabbit_user, []},
+              {mnesia, rabbit_user_permission, []},
+              {khepri, [rabbit_vhost],
+               #{?vhost_path(VHostName) => VHost}},
+              {khepri, [rabbit_auth_backend_internal],
+               #{}}]))
     ],
 
     ?assertEqual(

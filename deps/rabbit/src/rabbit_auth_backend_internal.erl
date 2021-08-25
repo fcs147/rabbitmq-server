@@ -696,17 +696,29 @@ clear_permissions_in_mnesia(Username, VirtualHost) ->
         end)).
 
 clear_permissions_in_khepri(Username, VirtualHost) ->
-    Path = khepri_user_permission_path(Username, VirtualHost),
-    case rabbit_khepri:delete(Path) of
-        ok ->
-            ok;
-        {error, {node_not_found, #{node_path := Path1}}} ->
-            case is_path_to(Path1) of
-                {user, _} -> throw({error, {no_such_user, Username}});
-                _         -> throw({error, {no_such_vhost, VirtualHost}})
+    %% FIXME: We check the vhost and user existence in a non-atomic manner:
+    %% the vhost and/or user could be added or removed between the check and
+    %% the delete.
+    %%
+    %% In the end, do we really need to have a more complex transaction
+    %% mechanism when we just want to delete something? The code and the
+    %% execution would be much simpler if we just deleted the permission and
+    %% be done with it.
+    Qs = [{rabbit_vhost:khepri_vhost_path(VirtualHost), exists},
+          {khepri_user_path(Username), exists}],
+    case rabbit_khepri:multi_query_and_get_data(Qs) of
+        [true, true] ->
+            Path = khepri_user_permission_path(Username, VirtualHost),
+            case rabbit_khepri:delete(Path) of
+                ok    -> ok;
+                Error -> throw(Error)
             end;
+        [false, _] ->
+            throw({error, {no_such_vhost, VirtualHost}});
+        [_, false] ->
+            throw({error, {no_such_user, Username}});
         Error ->
-            throw(Error)
+            Error
     end.
 
 update_user(Username, Fun) ->
@@ -899,18 +911,7 @@ clear_topic_permissions_in_mnesia(Username, VirtualHost) ->
         end)).
 
 clear_topic_permissions_in_khepri(Username, VirtualHost) ->
-    Path = khepri_topic_permission_path(Username, VirtualHost, ?STAR),
-    case rabbit_khepri:delete(Path) of
-        ok ->
-            ok;
-        {error, {node_not_found, #{node_path := Path1}}} ->
-            case is_path_to(Path1) of
-                {user, _} -> throw({error, {no_such_user, Username}});
-                _         -> throw({error, {no_such_vhost, VirtualHost}})
-            end;
-        Error ->
-            throw(Error)
-    end.
+    clear_topic_permissions_in_khepri(Username, VirtualHost, ?STAR).
 
 clear_topic_permissions(Username, VirtualHost, Exchange, ActingUser) ->
     rabbit_log:debug("Asked to clear topic permissions on exchange '~s' for '~s' in virtual host '~s'",
@@ -965,17 +966,30 @@ clear_topic_permissions_in_mnesia(Username, VirtualHost, Exchange) ->
         end)).
 
 clear_topic_permissions_in_khepri(Username, VirtualHost, Exchange) ->
-    Path = khepri_topic_permission_path(Username, VirtualHost, Exchange),
-    case rabbit_khepri:delete(Path) of
-        ok ->
-            ok;
-        {error, {node_not_found, #{node_path := Path1}}} ->
-            case is_path_to(Path1) of
-                {user, _} -> throw({error, {no_such_user, Username}});
-                _         -> throw({error, {no_such_vhost, VirtualHost}})
+    %% FIXME: We check the vhost and user existence in a non-atomic manner:
+    %% the vhost and/or user could be added or removed between the check and
+    %% the delete.
+    %%
+    %% In the end, do we really need to have a more complex transaction
+    %% mechanism when we just want to delete something? The code and the
+    %% execution would be much simpler if we just deleted the permission and
+    %% be done with it.
+    Qs = [{rabbit_vhost:khepri_vhost_path(VirtualHost), exists},
+          {khepri_user_path(Username), exists}],
+    case rabbit_khepri:multi_query_and_get_data(Qs) of
+        [true, true] ->
+            Path = khepri_topic_permission_path(
+                     Username, VirtualHost, Exchange),
+            case rabbit_khepri:delete(Path) of
+                ok    -> ok;
+                Error -> throw(Error)
             end;
+        [false, _] ->
+            throw({error, {no_such_vhost, VirtualHost}});
+        [_, false] ->
+            throw({error, {no_such_user, Username}});
         Error ->
-            throw(Error)
+            Error
     end.
 
 put_user(User, ActingUser) -> put_user(User, undefined, ActingUser).
@@ -1648,15 +1662,3 @@ khepri_user_permission_path(Username, VHostName) ->
 
 khepri_topic_permission_path(Username, VHostName, Exchange) ->
     [?MODULE, users, Username, topic_permissions, VHostName, Exchange].
-
-is_path_to(
-  [?MODULE, users, Username]) ->
-    {user, Username};
-is_path_to(
-  [?MODULE, users, Username, user_permissions, VHostName]) ->
-    {user_permissions, Username, VHostName};
-is_path_to(
-  [?MODULE, users, Username, topic_permissions, VHostName, Exchange]) ->
-    {topic_permissions, Username, VHostName, Exchange};
-is_path_to(_) ->
-    undefined.
